@@ -1,4 +1,5 @@
 Бондарев Игорь, 8Е21.
+## 1 лабораторная работа
 
 Для 1 лабораторной работы по CV необходимо реализовать базовый минимум операций над изображениями
 Входное изображение в формате RGB. Использовать методы OpenCV для реализации операций нельзя. Допустимы только методы cv2.imread() и cv2.imshow(). Все методы должны быть реализованы вручную.
@@ -20,7 +21,7 @@
 ![jpg](README_files/123.jpg)
 
 
-## Подготовка изображения и вспомогательные операции
+vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv Подготовка изображения и вспомогательные операции
 
 Цветное изображение загружается через OpenCV. Для работы с яркостью реализован перевод в оттенки серого по фотометрической формуле.
 
@@ -362,8 +363,8 @@ def rotate_90(image, times=1):
 ![png](README_files/Figure_8.png)
 
 
-
-Лабораторная работа №2. Визуальная одометрия (навигация)
+## 2 лабораторная работа
+Визуальная одометрия (навигация)
 Цель: Разработать систему визуальной одометрии (навигации) по группе фотографий.
 Ход работы: сделайте не менее 8 фото с переносом камеры или ноутбука по квадрату. Используя данные фотографии реализуйте следующее:
 
@@ -531,7 +532,7 @@ def filter_isolated_points(keypoints, radius=10, min_neighbors=5):
 
 ## 3. SIFT-подобный дескриптор
 
-# 3.1 Вычисление доминирующей ориентации
+### 3.1 Вычисление доминирующей ориентации
 
 Для точки берется окно 16×16 пикселей. В каждом пикселе рассчитывается магнитуда и угол градиента, затем строится гистограмма из 36 бинов (шаг 10°). Вклад пикселя взвешивается гауссовым окном (σ=8). Пик гистограммы задаёт доминирующий угол точки.
 
@@ -562,7 +563,7 @@ def compute_keypoint_orientations(keypoints, Ix, Iy,
     return oriented
 ```
 
-# 3.2 Вычисление доминирующей ориентации
+### 3.2 Вычисление доминирующей ориентации
 
 Область 16×16 вокруг точки разбивается на 4×4 блока. В каждом блоке строится гистограмма градиентов по 8 направлениям. Угол градиента пересчитывается относительно доминирующей ориентации точки, что даёт инвариантность к повороту. Полученный вектор из 4×4×8 = 128 элементов нормализуется, затем значения обрезаются сверху (порог 0.2) и нормализуются снова – это повышает устойчивость к изменению освещения.
 
@@ -712,7 +713,7 @@ def estimate_rotation_translation(matches, ransac_iterations=500, inlier_thresho
     
 ## 6. Построение траектории
     
-# 6.1 Накопление трансформаций
+### 6.1 Накопление трансформаций
 
 Последовательно применяем преобразования, начиная с первой позиции (0,0). Ошибки суммируются, и образуется дрейф.
 
@@ -733,7 +734,7 @@ def build_trajectory(transforms):
 
 ![png](README_files/Figure_f1.png)
 
-# 6.2 Накопление трансформаций
+### 6.2 Накопление трансформаций
 
 Второй метод не накапливает ошибки: на каждом кадре независимо вычисляется центр масс ключевых точек. Затем берётся разность с первым кадром.
 
@@ -767,637 +768,406 @@ def build_trajectories_from_keypoints(all_keypoints):
 
 ![png](README_files/Figure_f4.png)
 
-
-
-
-
-
-    
-
-
 # Вывод
 Задачи лабораторной работы выполнены в полном объеме
 
-Костин Арсений, 8Е21, вариант 3.
-
-# Лабораторная работа №3. Работа с видеопотоком
-
+# 3 Лабораторная работа. 
+Работа с видеопотоком
 <p>Цель: Научиться анализировать видеопоток.
 <p>Ход работы: получить видеопоток с Web-камеры и определить перемещающийся в кадре объект. Используя данные видеопотока реализуйте следующее:
+
 <p> 1. Реализуйте получение данных с Web-камеры
 <p> 2. Реализуйте алгоритм вычитания фона
 <p> 3. Реализуйте определение движущегося предмета
 <p> 4. Постройте траекторию движения объекта.
 <p> 5. Проведите тестирование на тестовом видео.
-<p> Проверка работоспособности: будет осуществляться на специальном видео, предоставленным преподавателем. Траектория движения, для которых недоступна.
+
+### 1 Запись фона
+
+Запись разбита на два шага: сначала фиксируется пустой фон (3 секунды), затем фиксируется движение объекта (5 секунд). Используются `cv2.VideoCapture` и обратный отсчёт для синхронизации.
 
 
 ```python
-import numpy as np
-import cv2
-import matplotlib
-import matplotlib.pyplot as plt
-from IPython.display import Image
-%matplotlib inline
-import math
-import time
-import lab1_functions as lb1
-import lab2_functions as lb2
-from collections import deque
-import os
-print(os.getcwd())
-print(os.listdir())
-```
-
-    /Users/arseniikostin/cv-labs-sem8/labs
-    ['sample_image2.png', 'sample_image3.png', 'gradient.png', 'lab3.py', 'histfunc.png', 'lab2.py', 'output.gif', 'sample_image4.jpg', 'sample_image5.jpg', 'lab1_functions.py', 'sequence1.jpeg', 'sequence6.jpeg', 'sequence7.jpeg', '__pycache__', 'doodles.ipynb', 'sequence8.jpeg', 'lab2.ipynb', 'sequence4.jpeg', 'harris1.png', 'sequence5.jpeg', 'gpt-stripfunctions.py', 'gaussfunc.png', 'lab1.py', 'lab3.ipynb', 'sequence2.jpeg', 'clean.ipynb', 'stitch.py', 'lab1.ipynb', 'lab3_v3.ipynb', 'clearoutput.py', 'sample_image.jpg', 'sequence3.jpeg', 'lab2_functions.py', 'combined.ipynb']
-
-
-# 3.1 Получить видеопоток с веб-камеры
-
-Запись разбита на два отдельных шага — фон и движение — чтобы можно было переснять каждый независимо.
-
-### Шаг 1 — запись фона
-
-Запускаем ячейку, убираем всё из кадра и ждём 3 секунды. Консоль тикает каждую секунду. После записи показываем первый и последний кадр — проверяем что в кадре пусто.
-
-
-```python
-BG_SECONDS  = 3
-FPS_APPROX  = 10
+BG_SECONDS = 3
+MOTION_SECONDS = 5
+FPS_APPROX = 10
 N_BG_FRAMES = BG_SECONDS * FPS_APPROX
+N_MOT_FRAMES = MOTION_SECONDS * FPS_APPROX
 
-cap = cv2.VideoCapture(2)
+THRESHOLD = 15
+MORPH_SIZE = 5
+CAM_ID = 0   
 
-print('ФОН')
-print(f'Держите кадр ПУСТЫМ в течение {BG_SECONDS} секунд...')
+print("ЗАПИСЬ ФОНА")
+cap = cv2.VideoCapture(CAM_ID)
+if not cap.isOpened():
+    raise RuntimeError("Камера не найдена")
 
 bg_frames = []
 for i in range(N_BG_FRAMES):
     ret, frame = cap.read()
     if ret:
-        bg_frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        img = frame[:, :, ::-1].copy()   # BGR -> RGB
+        bg_frames.append(img)
     if i % FPS_APPROX == 0:
-        print('...')
+        print(f"  кадр {i}")
     cv2.waitKey(100)
-
 cap.release()
-print(f'Записано кадров фона: {len(bg_frames)}')
+print(f"Захвачено кадров фона: {len(bg_frames)}")
 
-f, axarr = plt.subplots(1, 2, figsize=(12, 5))
-axarr[0].imshow(bg_frames[0])
-axarr[0].set_title('Фон начало')
-axarr[1].imshow(bg_frames[-1])
-axarr[1].set_title('Фон конец')
-for ax in axarr: ax.axis('off')
-plt.suptitle('в кадре не должно быть лишних объектов')
+plt.figure(figsize=(10,4))
+plt.subplot(1,2,1); plt.imshow(bg_frames[0]);  plt.title('Фон: начало')
+plt.subplot(1,2,2); plt.imshow(bg_frames[-1]); plt.title('Фон: конец')
 plt.show()
 ```
 
-    === ЗАПИСЬ ФОНА ===
-    Держите кадр ПУСТЫМ в течение 3 секунд...
-    ...
-    ...
-    ...
-    Записано кадров фона: 30
-
-
+    ЗАПИСЬ ФОНА
+        кадр 0
+        кадр 10
+        кадр 20
+    Захвачено кадров фона: 30
 
     
-![png](combined345_files/combined345_4_1.png)
+![png](README_files/Безымянный1.png)
     
-
-
-### Шаг 2 — запись движения
-
-После старта идёт обратный отсчёт 3 ... 1, вносим объект и плавно двигаем его по кадру 5 секунд.
-
-
 ```python
-COUNTDOWN_SEC  = 3
-MOTION_SECONDS = 5
-N_MOT_FRAMES   = MOTION_SECONDS * FPS_APPROX
-
-cap = cv2.VideoCapture(2)
-
-print('запись')
-for s in range(COUNTDOWN_SEC, 0, -1):
-    print(f'  Старт через {s}...')
-    time.sleep(1)
-print('двигаем')
-
+print("\nЗАПИСЬ ДВИЖЕНИЯ")
+cap = cv2.VideoCapture(CAM_ID)
 motion_frames = []
 for i in range(N_MOT_FRAMES):
     ret, frame = cap.read()
     if ret:
-        motion_frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        img = frame[:, :, ::-1].copy()
+        motion_frames.append(img)
     if i % FPS_APPROX == 0:
-        print(f'...')
+        print(f"  кадр {i}")
     cv2.waitKey(100)
-
 cap.release()
-frames_sequence = bg_frames + motion_frames
-print(f'Записано кадров движения: {len(motion_frames)}')
+print(f"Захвачено кадров движения: {len(motion_frames)}")
 
-step = max(1, len(motion_frames) // 4)
-f, axarr = plt.subplots(1, 4, figsize=(18, 4))
-for i, ax in enumerate(axarr):
-    idx = min(i * step, len(motion_frames) - 1)
-    ax.imshow(motion_frames[idx])
-    ax.set_title(f'Кадр движения #{idx}')
-    ax.axis('off')
-plt.suptitle('объект должен быть виден и двигаться')
+step = max(1, len(motion_frames)//4)
+indices = list(range(0, len(motion_frames), step))[:4]
+plt.figure(figsize=(16,4))
+for i, idx in enumerate(indices):
+    plt.subplot(1,4,i+1); plt.imshow(motion_frames[idx]); plt.title(f'Движение {idx}')
 plt.show()
 ```
-
-    запись
-      Старт через 3...
-      Старт через 2...
-      Старт через 1...
-    двигаем
-    ...
-    ...
-    ...
-    ...
-    ...
-    Записано кадров движения: 50
-
-
+    ЗАПИСЬ ДВИЖЕНИЯ
+        кадр 0
+        кадр 10
+        кадр 20
+        кадр 30
+        кадр 40
+    Захвачено кадров движения: 50
 
     
-![png](combined345_files/combined345_6_1.png)
-    
+![png](README_files/Безымянный2.png)
 
 
-# 3.2 Инициализировать вычитатель фона
 
-Берём все кадры фона и считаем попиксельное среднее — это и есть наша модель фона. Логика та же, что и при любом усреднении: случайные отклонения из-за шума камеры компенсируют друг друга, остаётся стабильная картина пустой сцены.
+### 2 Модель фона
+
+Модель фона строится попиксельным усреднением всех кадров пустой сцены. Случайный шум матрицы камеры при усреднении подавляется, остаётся стабильная картина фона.
 
 
 ```python
-def build_background(frames):
-    bg = np.zeros_like(frames[0], dtype=float)
-    for f in frames:
-        bg += f.astype(float)
-    bg /= len(frames)
-    return bg
+def construct_background(sequence):
+    accum = np.zeros_like(sequence[0], dtype=np.float64)
+    for f in sequence:
+        accum += f.astype(np.float64)
+    accum /= len(sequence)
+    return accum
 
-background = build_background(bg_frames)
+background = construct_background(bg_frames)
+```
 
-plt.figure(figsize=(6, 4))
-plt.imshow(background.astype(np.uint8))
-plt.title('Модель фона')
-plt.axis('off')
-plt.show()
+    
+![png](README_files/Безымянный3.png)
+    
+
+
+### 3 Вычитание фона и бинарная маска
+
+Для каждого кадра вычисляется абсолютная разность по каждому каналу RGB между текущим кадром и моделью фона. Затем разность усредняется по трём каналам, формируя одноканальное изображение 
+$$D = \frac{|R - R_{bg}| + |G - G_{bg}| + |B - B_{bg}|}{3}$$
+
+Пиксели, для которых D превышает порог THRESHOLD, считаются передним планом и получают значение 255 (белый), остальные — 0 (чёрный).
+
+```python
+def difference_mask(frame, bg, thr):
+    d = np.abs(frame.astype(np.float64) - bg.astype(np.float64))
+    gray = (d[:,:,0] + d[:,:,1] + d[:,:,2]) / 3.0
+    mask = np.zeros_like(gray, dtype=np.uint8)
+    mask[gray > thr] = 255
+    return gray, mask
 ```
 
 
     
-![png](combined345_files/combined345_8_0.png)
+![png](README_files/Безымянный4.png)
     
 
 
-# 3.3 Применить вычитание фона к кадру
+### 4 Морфологическая очистка маски
 
-Для каждого кадра считаем абсолютную разность с фоном по каждому каналу RGB. Потом усредняем разность по трём каналам — получаем одноканальное изображение, где яркость пикселя = насколько сильно он отличается от фона.
+Сырая маска содержит множество ложных срабатываний из-за шумов и мелких изменений освещения. Для их удаления применяется морфологическое открытие: сначала эрозия, затем дилатация с квадратным структурным элементом размера MORPH_SIZE × MORPH_SIZE.
 
+#### Эрозия
 
-```python
-THRESHOLD = 10
-
-def subtract_background(frame, bg, threshold):
-    diff      = np.abs(frame.astype(float) - bg)
-    diff_gray = (diff[:, :, 0] + diff[:, :, 1] + diff[:, :, 2]) / 3.0
-    mask      = np.zeros(diff_gray.shape, dtype=np.uint8)
-    mask[diff_gray > threshold] = 255
-    return diff_gray, mask
-```
-
-# 3.4 Получить маску переднего плана (foreground mask)
-
-Применяем вычитание к тестовому кадру. Всё что ярче порога — бинаризуется в белый (255), остальное — чёрный (0). Белые пиксели — кандидаты в «движущийся объект».
-
+Центральный пиксель остаётся белым (255) только если все пиксели под окном белые. Это удаляет мелкие белые пятна.
 
 ```python
-frame_test = motion_frames[len(motion_frames) // 2]
-
-diff_gray_test, mask_test = subtract_background(frame_test, background, THRESHOLD)
-
-f, axarr = plt.subplots(1, 3, figsize=(15, 5))
-axarr[0].imshow(frame_test)
-axarr[0].set_title('Кадр с движением')
-axarr[1].imshow(diff_gray_test, cmap='gray')
-axarr[1].set_title('Разность |кадр - фон|')
-axarr[2].imshow(mask_test, cmap='gray')
-axarr[2].set_title(f'Бинарная маска (порог = {THRESHOLD})')
-for ax in axarr: ax.axis('off')
-plt.show()
+def erode_manual(mask, ksize):
+    h, w = mask.shape
+    pad = ksize // 2
+    bin_mask = mask > 0
+    padded = np.pad(bin_mask, pad, mode='constant', constant_values=True)
+    res = np.zeros_like(mask, dtype=np.uint8)
+    for y in range(h):
+        for x in range(w):
+            window = padded[y:y+ksize, x:x+ksize]
+            res[y, x] = 255 if np.all(window) else 0
+    return res
 ```
 
 
-    
-![png](combined345_files/combined345_12_0.png)
-    
+#### Дилатация
 
-
-# 3.5 Очистить маску (морфология, шумоподавление)
-
-Сырая маска шумная — на ней много мелких белых пятен от перепадов освещения и шума камеры. Применяем морфологическое открытие: сначала эрозия уничтожает мелкие пятна, потом дилатация возвращает размер оставшимся (настоящим) объектам.
-
-В лабе 1 эрозия и дилатация были реализованы через тройные питоновские циклы — на одном изображении это нормально, но на 50 кадрах видео работало бы более 5 минут. Поэтому здесь делаем то же самое, но через numpy-операции: скользящее минимальное/максимальное по окну через `np.lib.stride_tricks`. Результат идентичный — только быстро.
-
+Центральный пиксель становится белым, если хотя бы один пиксель под окном белый. Это восстанавливает размер объектов, «съеденных» эрозией.
 
 ```python
-def fast_erode(mask_bin, size=5):
-    pad = size // 2
-    padded = np.pad(mask_bin, pad, mode='constant', constant_values=1)
-    h, w = mask_bin.shape
-
-    windows = np.lib.stride_tricks.sliding_window_view(padded, (size, size))
-    return windows.min(axis=(-2, -1)).astype(np.uint8)
-
-def fast_dilate(mask_bin, size=5):
-    pad = size // 2
-    padded = np.pad(mask_bin, pad, mode='constant', constant_values=0)
-    windows = np.lib.stride_tricks.sliding_window_view(padded, (size, size))
-    return windows.max(axis=(-2, -1)).astype(np.uint8)
-
-def clean_mask(mask_uint8, morph_size=5):
-    mask_bin = (mask_uint8 // 255).astype(np.uint8)
-    eroded   = fast_erode(mask_bin,  morph_size)
-    dilated  = fast_dilate(eroded,   morph_size)
-    return (dilated * 255).astype(np.uint8)
-
-mask_cleaned = clean_mask(mask_test, morph_size=5)
-
-f, axarr = plt.subplots(1, 2, figsize=(10, 5))
-axarr[0].imshow(mask_test,    cmap='gray')
-axarr[0].set_title('Маска до очистки')
-axarr[1].imshow(mask_cleaned, cmap='gray')
-axarr[1].set_title('Маска после эрозии + дилатации')
-for ax in axarr: ax.axis('off')
-plt.show()
+def dilate_manual(mask, ksize):
+    h, w = mask.shape
+    pad = ksize // 2
+    bin_mask = mask > 0
+    padded = np.pad(bin_mask, pad, mode='constant', constant_values=False)
+    res = np.zeros_like(mask, dtype=np.uint8)
+    for y in range(h):
+        for x in range(w):
+            window = padded[y:y+ksize, x:x+ksize]
+            res[y, x] = 255 if np.any(window) else 0
+    return res
 ```
 
+```python
+def clean_mask(mask, ksize):
+    return dilate_manual(erode_manual(mask, ksize), ksize)
+```
 
-    
-![png](combined345_files/combined345_14_0.png)
-    
+![png](README_files/Безымянный5.png)
 
 
-# 3.6 Найти контуры движущихся объектов
+### 5 Поиск объекта на маске
 
-Контурный пиксель — белый пиксель маски, у которого хотя бы один из четырёх соседей чёрный. То есть он стоит на границе объекта. Проходим по всей маске и собираем такие пиксели в список.
+Для нахождения движущегося объекта на очищенной маске используется обход в ширину (BFS) для выделения всех связных областей белых пикселей. Из них выбирается область с максимальной площадью. Для нее вычисляются:
 
+- центроид – среднее арифметическое координат всех пикселей области;
+
+- bounding box – минимальный и максимальный номера строк и столбцов;
+
+- граничные пиксели – пиксели области, у которых хотя бы один из четырёх соседей не принадлежит области (контур).
 
 ```python
-def find_contour_pixels(mask_uint8):
-    m    = mask_uint8
-    inner = m[1:-1, 1:-1]
-    is_white    = inner == 255
-    has_black_neighbor = (
-        (m[0:-2, 1:-1] == 0) |
-        (m[2:,   1:-1] == 0) |
-        (m[1:-1, 0:-2] == 0) |
-        (m[1:-1, 2:]   == 0)
-    )
-    contour_map = is_white & has_black_neighbor
-    rows, cols  = np.where(contour_map)
-    return list(zip(rows + 1, cols + 1))
+def extract_blob_info(mask):
+    h, w = mask.shape
+    seen = np.zeros((h, w), dtype=bool)
+    best_set = None
+    best_cx = best_cy = None
+    best_bbox = None
+    best_border = None
 
-contour_pixels = find_contour_pixels(mask_cleaned)
-
-frame_with_contour = frame_test.copy()
-for (r, c) in contour_pixels:
-    frame_with_contour[r, c] = [255, 0, 0]
-
-plt.figure(figsize=(7, 5))
-plt.imshow(frame_with_contour)
-plt.title(f'Контур объекта (найдено {len(contour_pixels)} пикселей)')
-plt.axis('off')
-plt.show()
+    for y in range(h):
+        for x in range(w):
+            if mask[y, x] == 255 and not seen[y][x]:
+                q = deque()
+                q.append((x, y))
+                seen[y][x] = True
+                pixels = set()
+                pixels.add((x, y))
+                while q:
+                    cx, cy = q.popleft()
+                    for nx, ny in [(cx-1,cy),(cx+1,cy),(cx,cy-1),(cx,cy+1)]:
+                        if 0 <= nx < w and 0 <= ny < h and mask[ny, nx] == 255 and not seen[ny][nx]:
+                            seen[ny][nx] = True
+                            q.append((nx, ny))
+                            pixels.add((nx, ny))
+                if len(pixels) > len(best_set or []):
+                    best_set = pixels
+                    xs = [p[0] for p in pixels]
+                    ys = [p[1] for p in pixels]
+                    best_cx = int(np.mean(xs))
+                    best_cy = int(np.mean(ys))
+                    best_bbox = (min(xs), min(ys), max(xs), max(ys))
+                    # граничные пиксели
+                    best_border = set()
+                    for (px, py) in pixels:
+                        is_border = False
+                        for nx, ny in [(px-1,py),(px+1,py),(px,py-1),(px,py+1)]:
+                            if (nx, ny) not in pixels:
+                                is_border = True
+                                break
+                        if is_border:
+                            best_border.add((px, py))
+    return best_set, (best_cx, best_cy) if best_set else None, best_bbox, best_border
 ```
 
 
     
-![png](combined345_files/combined345_16_0.png)
+![png](README_files/Безымянный6.png)
     
 
 
-# 3.7 Определить и отфильтровать объекты по размеру
+### 6 Траектория движения
 
-На маске может быть несколько белых областей — часть из них шум, который не убрала морфология. Чтобы найти отдельные объекты, используем обход в ширину (BFS): стартуем из непосещённого белого пикселя, обходим все связные с ним — это один объект. Повторяем для всех оставшихся. Компоненты с площадью меньше `min_area` отбрасываем как шум.
+Для каждого кадра движения находится центроид самого большого объекта, если объект присутствует. Последовательность центроидов формирует траекторию.
 
+Вспомогательные функции рисования:
 
 ```python
-def connected_components(mask_uint8, min_area=300):
-    visited    = np.zeros_like(mask_uint8, dtype=bool)
-    h, w       = mask_uint8.shape
-    components = []
-
-    for r in range(h):
-        for c in range(w):
-            if mask_uint8[r, c] == 255 and not visited[r, c]:
-                queue     = deque([(r, c)])
-                visited[r, c] = True
-                component = []
-                while queue:
-                    cr, cc = queue.popleft()
-                    component.append((cr, cc))
-                    for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
-                        nr, nc = cr+dr, cc+dc
-                        if 0 <= nr < h and 0 <= nc < w:
-                            if mask_uint8[nr, nc] == 255 and not visited[nr, nc]:
-                                visited[nr, nc] = True
-                                queue.append((nr, nc))
-                if len(component) >= min_area:
-                    components.append(component)
-
-    return components
-
-components = connected_components(mask_cleaned, min_area=300)
-print(f'Найдено объектов после фильтрации по площади: {len(components)}')
-for i, comp in enumerate(components):
-    print(f'  Объект {i}: {len(comp)} пикселей')
-```
-
-    Найдено объектов после фильтрации по площади: 4
-      Объект 0: 39430 пикселей
-      Объект 1: 2696 пикселей
-      Объект 2: 384 пикселей
-      Объект 3: 1549 пикселей
-
-
-# 3.8 Вычислить центроид и bounding box объекта
-
-Центроид — «центр масс» компоненты, то есть среднее по строкам и столбцам всех её пикселей. Bounding box — минимальный охватывающий прямоугольник, находим через min/max строк и столбцов.
-
-
-```python
-def get_centroid_and_bbox(component):
-    px = np.array(component)
-    centroid_r = px[:, 0].mean()
-    centroid_c = px[:, 1].mean()
-    r0, c0 = px[:, 0].min(), px[:, 1].min()
-    r1, c1 = px[:, 0].max(), px[:, 1].max()
-    return (centroid_c, centroid_r), (r0, c0, r1, c1)
-
-vis_frame = frame_test.copy()
-for comp in components:
-    (cx, cy), (r0, c0, r1, c1) = get_centroid_and_bbox(comp)
-    vis_frame[r0, c0:c1] = [255, 0, 0]
-    vis_frame[r1, c0:c1] = [255, 0, 0]
-    vis_frame[r0:r1, c0] = [255, 0, 0]
-    vis_frame[r0:r1, c1] = [255, 0, 0]
-    cr, cc = int(cy), int(cx)
-    for d in range(-6, 7):
-        if 0 <= cr+d < vis_frame.shape[0]: vis_frame[cr+d, cc] = [0, 255, 0]
-        if 0 <= cc+d < vis_frame.shape[1]: vis_frame[cr, cc+d] = [0, 255, 0]
-
-plt.figure(figsize=(8, 6))
-plt.imshow(vis_frame)
-plt.title('Bounding box (красный) и центроид (зелёный)')
-plt.axis('off')
-plt.show()
-```
-
-
-    
-![png](combined345_files/combined345_20_0.png)
-    
-
-
-# 3.9 Накопить координаты центроида и построить траекторию
-
-Запускаем полный конвейер по всем кадрам движения. На каждом кадре: вычитание фона → очистка маски → поиск компонент → берём самую большую → запоминаем центроид. Если объект не найден — пишем `None`.
-
-Траекторию строим через `lb2.draw_trajectory_generic` из второй лабы.
-
-
-```python
-MIN_AREA   = 300
-trajectory = []
-
-for idx, frame in enumerate(motion_frames):
-    _, mask = subtract_background(frame, background, THRESHOLD)
-    mask_cl = clean_mask(mask, morph_size=5)
-    comps   = connected_components(mask_cl, min_area=MIN_AREA)
-
-    if comps:
-        largest     = max(comps, key=lambda c: len(c))
-        (cx, cy), _ = get_centroid_and_bbox(largest)
-        trajectory.append((cx, cy))
-    else:
-        trajectory.append(None)
-
-detected = sum(1 for t in trajectory if t is not None)
-print(f'Кадров движения обработано: {len(motion_frames)}')
-print(f'Кадров с обнаруженным объектом: {detected}')
-
-if detected == 0:
-    print('Объект не найден')
-
-valid_traj  = [(i, p) for i, p in enumerate(trajectory) if p is not None]
-pos_list    = [p for p in trajectory if p is not None]
-labels_list = [str(i) for i, _ in valid_traj]
-
-if pos_list:
-    lb2.draw_trajectory_generic(
-        pos_list,
-        image_labels=labels_list,
-        title='Траектория движущегося объекта',
-        color='darkorange'
-    )
-```
-
-    Кадров движения обработано: 50
-    Кадров с обнаруженным объектом: 50
-
-
-
-    
-![png](combined345_files/combined345_22_1.png)
-    
-
-
-# 3.10 Отобразить результаты (оригинал + маска + траектория + bounding box)
-
-Финальная сводная визуализация. Берём первый кадр, где объект обнаружен, и показываем четыре этапа рядом. На последнем — рисуем накопленную траекторию линиями через алгоритм Брезенхема (рисует прямую попиксельно, без `cv2.line`).
-
-
-```python
-def bresenham_line(img, x0, y0, x1, y1, color):
-    dx, dy = abs(x1-x0), abs(y1-y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx - dy
+def draw_line(pic, p1, p2, color):
+    x1, y1 = p1
+    x2, y2 = p2
+    dx = abs(x2 - x1)
+    dy = -abs(y2 - y1)
+    sx = 1 if x1 < x2 else -1
+    sy = 1 if y1 < y2 else -1
+    err = dx + dy
     while True:
-        if 0 <= y0 < img.shape[0] and 0 <= x0 < img.shape[1]:
-            img[y0, x0] = color
-        if x0 == x1 and y0 == y1:
+        if 0 <= x1 < pic.shape[1] and 0 <= y1 < pic.shape[0]:
+            pic[y1, x1] = color
+        if x1 == x2 and y1 == y2:
             break
         e2 = 2 * err
-        if e2 > -dy: err -= dy; x0 += sx
-        if e2 <  dx: err += dx; y0 += sy
+        if e2 >= dy:
+            err += dy
+            x1 += sx
+        if e2 <= dx:
+            err += dx
+            y1 += sy
 
-best_idx   = next((i for i, t in enumerate(trajectory) if t is not None), 0)
-best_frame = motion_frames[best_idx]
+def draw_rect(pic, x0, y0, x1, y1, color):
+    for x in range(x0, x1+1):
+        pic[y0, x] = color
+        pic[y1, x] = color
+    for y in range(y0, y1+1):
+        pic[y, x0] = color
+        pic[y, x1] = color
 
-_, mask_best = subtract_background(best_frame, background, THRESHOLD)
-mask_best_cl = clean_mask(mask_best, morph_size=5)
-comps_best   = connected_components(mask_best_cl, min_area=MIN_AREA)
+def draw_spot(pic, centre, r, color):
+    cx, cy = centre
+    for dx in range(-r, r+1):
+        for dy in range(-r, r+1):
+            nx, ny = cx+dx, cy+dy
+            if 0 <= nx < pic.shape[1] and 0 <= ny < pic.shape[0]:
+                pic[ny, nx] = color
+```
 
-frame_result = best_frame.copy()
-for comp in comps_best:
-    (cx, cy), (r0, c0, r1, c1) = get_centroid_and_bbox(comp)
-    frame_result[r0, c0:c1] = [255, 0, 0]
-    frame_result[r1, c0:c1] = [255, 0, 0]
-    frame_result[r0:r1, c0] = [255, 0, 0]
-    frame_result[r0:r1, c1] = [255, 0, 0]
-    cr, cc = int(cy), int(cx)
-    for d in range(-6, 7):
-        if 0 <= cr+d < frame_result.shape[0]: frame_result[cr+d, cc] = [0, 255, 0]
-        if 0 <= cc+d < frame_result.shape[1]: frame_result[cr, cc+d] = [0, 255, 0]
+Накопление координат центроида и отрисовка траектории на первом кадре:
 
-prev_pt = None
-for pt in trajectory:
-    if pt is None:
-        prev_pt = None
-        continue
-    px, py = int(pt[0]), int(pt[1])
-    if prev_pt is not None:
-        bresenham_line(frame_result, int(prev_pt[0]), int(prev_pt[1]), px, py, [255, 220, 0])
-    if 0 <= py < frame_result.shape[0] and 0 <= px < frame_result.shape[1]:
-        frame_result[py, px] = [255, 255, 0]
-    prev_pt = pt
+```python
+positions = []
+for frame in motion_frames:
+    _, msk = difference_mask(frame, background, THRESHOLD)
+    msk_cl = clean_mask(msk, MORPH_SIZE)
+    _, ct, _, _ = extract_blob_info(msk_cl)
+    if ct:
+        positions.append(ct)
 
-f, axarr = plt.subplots(1, 4, figsize=(22, 5))
-axarr[0].imshow(best_frame)
-axarr[0].set_title(f'Оригинал (кадр #{best_idx})')
-axarr[1].imshow(mask_best, cmap='gray')
-axarr[1].set_title('Маска (до очистки)')
-axarr[2].imshow(mask_best_cl, cmap='gray')
-axarr[2].set_title('Маска (после морфологии)')
-axarr[3].imshow(frame_result)
-axarr[3].set_title('Bbox + траектория')
-for ax in axarr: ax.axis('off')
-plt.tight_layout()
-plt.show()
+if positions:
+    trail_img = motion_frames[0].copy()
+    for i in range(1, len(positions)):
+        draw_line(trail_img, positions[i-1], positions[i], [255, 0, 0])
+    for pt in positions:
+        draw_spot(trail_img, pt, 2, [255, 255, 0])
+
+    plt.figure(figsize=(8,6))
+    plt.imshow(trail_img)
+    plt.title('Траектория движения')
+    plt.axis('off')
+    plt.show()
+```
+    
+![png](README_files/Безымянный7.png)
+    
+
+
+### 7 Графики изменения координат
+
+Для анализа движения строятся графики координаты X и Y центроида от номера кадра.
+
+
+```python
+    xs = [p[0] for p in positions]
+    ys = [p[1] for p in positions]
+    idxs = list(range(len(positions)))
+    plt.figure(figsize=(10,4))
+    plt.subplot(1,2,1)
+    plt.plot(idxs, xs, 'r.-')
+    plt.xlabel('Кадр')
+    plt.ylabel('X')
+    plt.grid(True)
+    plt.subplot(1,2,2)
+    plt.plot(idxs, ys, 'b.-')
+    plt.xlabel('Кадр')
+    plt.ylabel('Y')
+    plt.grid(True)
+    plt.suptitle('Координаты центроида')
+    plt.tight_layout()
+    plt.show()
 ```
 
 
+![png](README_files/Безымянный8.png)
     
-![png](combined345_files/combined345_24_0.png)
-    
-
 
 # Вывод
 
-В ходе лабораторной работы реализован полный конвейер обнаружения и трекинга движущегося объекта без использования готовых алгоритмов OpenCV.
+В ходе лабораторной работы реализован полный конвейер обнаружения и отслеживания движущегося объекта в видеопотоке без использования готовых функций компьютерного зрения (кроме захвата кадров). Построена модель фона усреднением, реализовано вычитание фона с пороговой бинаризацией, написаны морфологические операции эрозии и дилатации для очистки маски, применён BFS для поиска связных областей и вычисления центроида. По последовательности центроидов построена траектория и графики координат.
 
-Модель фона строится как попиксельное среднее по кадрам пустой сцены. Вычитание фона выполняется через абсолютную разность с последующей бинаризацией по порогу. Морфологическое открытие (эрозия + дилатация) реализовано через скользящие numpy-окна (`stride_tricks`) — это сохраняет логику операций из лабы 1, но работает на всём видео за секунды вместо минут. Поиск объектов выполнен BFS по связным компонентам с фильтрацией по площади. Центроид и bounding box вычисляются аналитически через min/max/mean по координатам пикселей. Траектория строится через `lb2.draw_trajectory_generic`, отрисовка линий — алгоритмом Брезенхема.
+Все операции выполнены вручную с использованием базовых циклов и numpy, что соответствует требованиям задания.
 
-Костин Арсений, 8Е21, вариант 3.
 
-# Лабораторная работа №4. Разработка алгоритма определения лиц.
+## 4 лабораторная работа 
+Разработка алгоритма определения лиц.
 
 <p>Цель: на практике закрепить полученные в ходе курса знания, в том числе по машинному обучению и нейронным сетям для решения задачи детектирования лиц и классификации лиц на мужчин и женщин.
-<p>Ход работы: в ходе первой и второй лабораторной каждый из студентов собрал свои фотографии. Данную выборку можно использовать в качестве обучающей выборки для синтеза алгоритмов. Разметку данных каждый студент проводит сам. Алгоритм детектирования и классификации может быть любым.
 
-<p><b>Выбранный метод: HOG + Linear SVM</b>
+<p><b>Выбранный метод: LBP + Linear SVM</b>
 
-<p>HOG (Histogram of Oriented Gradients) описывает форму объекта через распределение направлений градиентов — ровно тот же принцип, что использовался в детекторе Харриса в лабе 2, только там мы считали $I_x$, $I_y$ для поиска углов, а здесь строим из них гистограммы для описания внешнего вида патча.
+<p>LBP (Local Binary Patterns) описывает локальную текстуру изображения путём сравнения центрального пикселя с его 8 соседями. LBP вычислительно дешевый, устойчив к монотонным изменениям освещённости и хорошо выделяет структурные особенности кожи, контуров лица и глаз, что делает его удобным для задач детекции при ограниченных вычислительных ресурсах.
 
 <p>SVM (Support Vector Machine) ищет гиперплоскость, максимально разделяющую два класса в пространстве HOG-признаков.
 
+### 1 Загрузка датасета и ручная разметка
+
+Используем датасет LFW (Labeled Faces in the Wild). Параметр min_faces_per_person=15 отфильтровывает персоны с малым количеством снимков, оставляя только репрезентативную выборку. Разметка по полу выполняется вручную через словарь GENDER_LABELS, что соответствует требованию о ручной аннотации данных.
 
 ```python
 import numpy as np
 import cv2
-import matplotlib
 import matplotlib.pyplot as plt
-from IPython.display import Image
-%matplotlib inline
-import math
-import os
-import pickle
-
-import lab1_functions as lb1
-import lab2_functions as lb2
-import lab3_functions as lb3
 from collections import deque
-
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.datasets import fetch_lfw_people
+import os
+import pickle
 
-# Настройка графиков по ГОСТ: шрифт с засечками, 14pt
 plt.rcParams.update({
-    'font.family':      'serif',
-    'font.serif':       ['Times New Roman', 'DejaVu Serif', 'Liberation Serif'],
-    'font.size':        14,
-    'axes.titlesize':   14,
-    'axes.labelsize':   14,
-    'xtick.labelsize':  12,
-    'ytick.labelsize':  12,
-    'legend.fontsize':  12,
-    'figure.dpi':       100,
+    'font.family': 'serif',
+    'font.serif': ['Times New Roman', 'DejaVu Serif', 'Liberation Serif'],
+    'font.size': 12,
+    'figure.dpi': 100,
 })
 
-print(os.getcwd())
-print(os.listdir())
-```
-
-    /Users/arseniikostin/cv-labs-sem8/labs
-    ['sample_image2.png', 'sample_image3.png', 'gradient.png', 'histfunc.png', 'lab2.py', 'output.gif', 'sample_image4.jpg', 'sample_image5.jpg', 'lab1_functions.py', 'sequence1.jpeg', 'sequence6.jpeg', 'sequence7.jpeg', '__pycache__', 'detector_model.pkl', 'doodles.ipynb', 'sequence8.jpeg', 'lb5cv.png', 'lab2.ipynb', 'sequence4.jpeg', 'gender_model.pkl', 'harris1.png', 'sequence5.jpeg', 'lab4test.py', 'lab4.ipynb', 'gpt-stripfunctions.py', 'live_camera.py', 'gaussfunc.png', 'lab1.py', 'lab4_styled.ipynb', 'lab3.ipynb', 'sequence2.jpeg', 'signals.csv', 'clean.ipynb', 'lab3_functions.py', 'stitch.py', 'lab4_functions.py', 'lab1.ipynb', 'lab5.ipynb', 'lab5_styled.ipynb', 'clearoutput.py', 'sample_image.jpg', 'sequence3.jpeg', 'lab2_functions.py', 'combined.ipynb']
-
-
-# 4.1 Загрузка датасета
-
-Используем LFW (Labeled Faces in the Wild) — открытый датасет из 13 000+ фотографий лиц публичных людей. Параметр `min_faces_per_person=20` оставляет только тех, кого достаточно много — так модель лучше обобщается и не переобучается на единичные примеры.
-
-Разметку по полу делаем вручную через словарь `GENDER_LABELS` — это и есть ручная разметка данных согласно условию лабы.
-
-
-```python
-print('Загружаем датасет LFW...')
-lfw = fetch_lfw_people(min_faces_per_person=20, resize=0.5, color=True)
-
+print('Загружаем датасет LFW')
+lfw = fetch_lfw_people(min_faces_per_person=15, resize=0.5, color=True)
 print(f'Изображений: {lfw.images.shape[0]}')
 print(f'Размер патча: {lfw.images.shape[1]}x{lfw.images.shape[2]}')
-print(f'Персон: {len(lfw.target_names)}')
-print('Имена:', lfw.target_names)
-```
 
-    Загружаем датасет LFW...
-    Изображений: 3023
-    Размер патча: 62x47
-    Персон: 62
-    Имена: ['Alejandro Toledo' 'Alvaro Uribe' 'Amelie Mauresmo' 'Andre Agassi'
-     'Angelina Jolie' 'Ariel Sharon' 'Arnold Schwarzenegger'
-     'Atal Bihari Vajpayee' 'Bill Clinton' 'Carlos Menem' 'Colin Powell'
-     'David Beckham' 'Donald Rumsfeld' 'George Robertson' 'George W Bush'
-     'Gerhard Schroeder' 'Gloria Macapagal Arroyo' 'Gray Davis'
-     'Guillermo Coria' 'Hamid Karzai' 'Hans Blix' 'Hugo Chavez' 'Igor Ivanov'
-     'Jack Straw' 'Jacques Chirac' 'Jean Chretien' 'Jennifer Aniston'
-     'Jennifer Capriati' 'Jennifer Lopez' 'Jeremy Greenstock' 'Jiang Zemin'
-     'John Ashcroft' 'John Negroponte' 'Jose Maria Aznar'
-     'Juan Carlos Ferrero' 'Junichiro Koizumi' 'Kofi Annan' 'Laura Bush'
-     'Lindsay Davenport' 'Lleyton Hewitt' 'Luiz Inacio Lula da Silva'
-     'Mahmoud Abbas' 'Megawati Sukarnoputri' 'Michael Bloomberg' 'Naomi Watts'
-     'Nestor Kirchner' 'Paul Bremer' 'Pete Sampras' 'Recep Tayyip Erdogan'
-     'Ricardo Lagos' 'Roh Moo-hyun' 'Rudolph Giuliani' 'Saddam Hussein'
-     'Serena Williams' 'Silvio Berlusconi' 'Tiger Woods' 'Tom Daschle'
-     'Tom Ridge' 'Tony Blair' 'Vicente Fox' 'Vladimir Putin' 'Winona Ryder']
-
-
-Присваиваем метки пола вручную. 0 — мужчина, 1 — женщина. Это разметка данных.
-
-
-```python
 GENDER_LABELS = {
     'Ariel Sharon': 0, 'Colin Powell': 0, 'Donald Rumsfeld': 0,
     'George W Bush': 0, 'Gerhard Schroeder': 0, 'Hugo Chavez': 0,
@@ -1412,444 +1182,253 @@ GENDER_LABELS = {
     'Gloria Macapagal Arroyo': 1, 'Condoleezza Rice': 1,
 }
 
-gender_labels = []
 valid_indices = []
-
-for i, target_id in enumerate(lfw.target):
-    name = lfw.target_names[target_id]
+gender_labels = []
+for i, tid in enumerate(lfw.target):
+    name = lfw.target_names[tid]
     if name in GENDER_LABELS:
-        gender_labels.append(GENDER_LABELS[name])
         valid_indices.append(i)
+        gender_labels.append(GENDER_LABELS[name])
 
-images_valid  = lfw.images[valid_indices]
-gender_labels = np.array(gender_labels)
-
-print(f'Изображений с разметкой пола: {len(images_valid)}')
-print(f'Мужчин: {(gender_labels == 0).sum()}, Женщин: {(gender_labels == 1).sum()}')
+images_valid = lfw.images[valid_indices]
+y_gender = np.array(gender_labels)
+print(f'Отфильтровано {len(images_valid)} изображений')
+print(f'Мужчин {(y_gender==0).sum()}, Женщин {(y_gender==1).sum()}')
 
 f, axes = plt.subplots(2, 8, figsize=(16, 5))
 for row, gender in enumerate([0, 1]):
-    idxs = np.where(gender_labels == gender)[0][:8]
+    idxs = np.where(y_gender == gender)[0][:8]
     for col, idx in enumerate(idxs):
         axes[row, col].imshow(images_valid[idx])
+        axes[row, col].axis('off')
         name = lfw.target_names[lfw.target[valid_indices[idx]]]
         axes[row, col].set_title(name.split()[-1], fontsize=7)
-        axes[row, col].axis('off')
-axes[0, 0].set_ylabel('Мужчины', fontsize=10)
-axes[1, 0].set_ylabel('Женщины', fontsize=10)
-plt.suptitle('Примеры из датасета LFW с ручной разметкой пола')
-plt.tight_layout()
-plt.show()
+axes[0,0].set_ylabel('Мужчины'); axes[1,0].set_ylabel('Женщины')
+plt.suptitle('Примеры из датасета LFW с ручной разметкой')
+plt.tight_layout(); plt.show()
 ```
 
-    Изображений с разметкой пола: 2026
-    Мужчин: 1844, Женщин: 182
+![png](README_files/Безымянный11.png)
 
 
+### 2 LBP-дескриптор и предобработка
 
-    
-![png](combined345_files/combined345_33_1.png)
-    
-
-
-# 4.2 HOG-дескриптор
-
-HOG — Histogram of Oriented Gradients. Алгоритм пошагово:
-
-**Шаг 1 — градиенты.** Для каждого пикселя считаем $I_x$ и $I_y$ через центральные разности — ровно так же, как в лабе 2 при вычислении детектора Харриса. Из градиентов получаем магнитуду и угол:
-
-$$M = \sqrt{I_x^2 + I_y^2}, \quad \theta = \arctan\!\left(\frac{I_y}{I_x}\right) \bmod 180°$$
-
-Угол берём по модулю 180° (неориентированный) — нам не важно смотрит ли граница вверх или вниз.
-
-**Шаг 2 — ячейки.** Делим изображение на клетки 8×8 пикселей. В каждой ячейке строим гистограмму из 9 бинов по углам (0–180°), взвешенную по магнитуде.
-
-**Шаг 3 — блоки.** Объединяем соседние 2×2 ячейки в блок и нормируем его вектор на L2-норму. Нормировка делает дескриптор устойчивым к изменению освещения.
-
-**Результат** — конкатенация всех нормированных блоков.
-
-### Шаг 1: градиенты
-
-Перевод в grayscale через взвешенную сумму каналов, потом центральные разности.
-
+Для работы с яркостью реализуем ручной перевод в оттенки серого по фотометрической формуле. Изображения приводятся к единому размеру 48×48 с помощью билинейной интерполяции. Билинейное изменение размера вычисляет взвешенную сумму четырёх ближайших пикселей исходного изображения, что сохраняет плавность переходов без появления «лесенок».
 
 ```python
-def to_gray(image_float):
-    if len(image_float.shape) == 3:
+def to_gray_manual(image_float):
+    if image_float.ndim == 3:
         return (0.299*image_float[:,:,0] + 0.587*image_float[:,:,1] + 0.114*image_float[:,:,2]) * 255.0
     return image_float * 255.0
 
-def compute_gradients(gray):
-    Ix = np.zeros_like(gray)
-    Iy = np.zeros_like(gray)
-    Ix[:, 1:-1] = (gray[:, 2:] - gray[:, :-2]) / 2.0
-    Iy[1:-1, :] = (gray[2:, :] - gray[:-2, :]) / 2.0
-    magnitude = np.sqrt(Ix**2 + Iy**2)
-    angle     = np.degrees(np.arctan2(Iy, Ix)) % 180.0
-    return Ix, Iy, magnitude, angle
-
-sample = images_valid[0]
-gray   = to_gray(sample)
-Ix, Iy, magnitude, angle = compute_gradients(gray)
-
-f, axarr = plt.subplots(1, 4, figsize=(16, 4))
-axarr[0].imshow(sample)
-axarr[0].set_title('Исходное фото')
-axarr[1].imshow(gray, cmap='gray')
-axarr[1].set_title('Grayscale')
-axarr[2].imshow(magnitude, cmap='hot')
-axarr[2].set_title('Магнитуда градиента')
-axarr[3].imshow(angle, cmap='hsv')
-axarr[3].set_title('Угол градиента, °')
-for ax in axarr: ax.axis('off')
-plt.tight_layout()
-plt.show()
+def bilinear_resize(image, target_h, target_w):
+    orig_h, orig_w = image.shape[:2]
+    if target_h == orig_h and target_w == orig_w:
+        return image
+    
+    sy, sx = orig_h / target_h, orig_w / target_w
+    gy, gx = np.mgrid[0:target_h, 0:target_w]
+    
+    src_y = gy * sy
+    src_x = gx * sx
+    y0, x0 = np.floor(src_y).astype(int), np.floor(src_x).astype(int)
+    y1 = np.minimum(y0 + 1, orig_h - 1)
+    x1 = np.minimum(x0 + 1, orig_w - 1)
+    
+    dy, dx = src_y - y0, src_x - x0
+    w1 = (1-dy) * (1-dx)
+    w2 = dy * (1-dx)
+    w3 = (1-dy) * dx
+    w4 = dy * dx
+    
+    if image.ndim == 2:
+        out = image[y0, x0]*w1 + image[y1, x0]*w2 + image[y0, x1]*w3 + image[y1, x1]*w4
+    else:
+        out = np.stack([
+            image[y0, x0]*w1 + image[y1, x0]*w2 + image[y0, x1]*w3 + image[y1, x1]*w4
+            for i in range(3)], axis=-1)
+    return np.clip(out, 0, 255).astype(np.uint8)
 ```
 
-
-    
-![png](combined345_files/combined345_36_0.png)
-    
-
-
-### Шаг 2: гистограммы по ячейкам
-
-Сетка ячеек 8×8 пикселей. В каждой — 9-бинная гистограмма, где вес пикселя равен его магнитуде. Посмотрим на гистограммы нескольких ячеек — у ячеек с выраженными краями (брови, контур лица) будут пики в конкретных бинах.
+LBP (Local Binary Patterns) сравнивает центральный пиксель с 8 соседями. Если сосед ярче центра, записывается 1, иначе 0. 8 бит сдвигаются в соответствии с позицией соседа и объединяются в байт. Для всего патча строится нормированная гистограмма на 256 бинов, которая становится финальным вектором признаков.
 
 
 ```python
-CELL_SIZE = 8
-NUM_BINS  = 9
-BIN_WIDTH = 180.0 / NUM_BINS
-
-def build_cell_histograms(magnitude, angle, cell_size=8, num_bins=9):
-    h, w  = magnitude.shape
-    n_cy  = h // cell_size
-    n_cx  = w // cell_size
-    hists = np.zeros((n_cy, n_cx, num_bins))
-    for cy in range(n_cy):
-        for cx in range(n_cx):
-            r0, r1 = cy*cell_size, (cy+1)*cell_size
-            c0, c1 = cx*cell_size, (cx+1)*cell_size
-            hist, _ = np.histogram(angle[r0:r1, c0:c1], bins=num_bins,
-                                   range=(0, 180), weights=magnitude[r0:r1, c0:c1])
-            hists[cy, cx] = hist
-    return hists
-
-cell_hists = build_cell_histograms(magnitude, angle, CELL_SIZE, NUM_BINS)
-print(f'Сетка ячеек: {cell_hists.shape[0]}×{cell_hists.shape[1]}, бинов на ячейку: {NUM_BINS}')
-
-bins_x = np.arange(NUM_BINS) * BIN_WIDTH
-f, axes = plt.subplots(3, 4, figsize=(14, 8))
-for i, ax in enumerate(axes.flat):
-    cy = (i // 4) + 2
-    cx = (i %  4) + 1
-    ax.bar(bins_x, cell_hists[cy, cx], width=BIN_WIDTH*0.9, color='steelblue')
-    ax.set_title(f'Ячейка [{cy},{cx}]', fontsize=9)
-    ax.set_xlabel('Угол, °', fontsize=8)
-    ax.set_xticks(bins_x)
-    ax.set_xticklabels([f'{int(b)}' for b in bins_x], fontsize=7)
-plt.suptitle('Гистограммы ориентированных градиентов по ячейкам')
-plt.tight_layout()
-plt.show()
-```
-
-    Сетка ячеек: 7×5, бинов на ячейку: 9
-
-
-
+def compute_lbp_manual(gray_uint8):
+    p = np.pad(gray_uint8, 1, mode='edge')
     
-![png](combined345_files/combined345_38_1.png)
+    tl = p[:-2, :-2]; t = p[:-2, 1:-1]; tr = p[:-2, 2:]
+    l  = p[1:-1, :-2];                 r = p[1:-1, 2:]
+    bl = p[2:, :-2];   b = p[2:, 1:-1];  br = p[2:, 2:]
+    c  = p[1:-1, 1:-1]
+    
+    lbp = ((t >= c) << 7) | ((tr >= c) << 6) | ((r >= c) << 5) | \
+          ((br >= c) << 4) | ((b >= c) << 3) | ((bl >= c) << 2) | \
+          ((l >= c) << 1) | ((tl >= c) << 0)
+          
+    hist, _ = np.histogram(lbp, bins=256, range=(0, 256))
+    return (hist / (hist.sum() + 1e-6)).flatten()
+```
     
 
 
-### Шаг 3: блочная нормировка и финальный дескриптор
+### 3 Извлечение признаков и генерация негативов
 
-Объединяем соседние 2×2 ячейки в блок, нормируем вектор блока:
-
-$$\mathbf{v}_{\text{norm}} = \frac{\mathbf{v}}{\sqrt{\|\mathbf{v}\|^2 + \varepsilon}}$$
-
-Маленький $\varepsilon = 10^{-6}$ защищает от деления на ноль в пустых ячейках. После нормировки все блоки конкатенируем в один вектор — это и есть HOG-дескриптор изображения.
+Детектору необходимо видеть оба класса. В качестве негативов («не-лицо») используются те же изображения LFW, но подвергнутые 6 типам искажений: вертикальный флип, сдвиг с шумом, транспонирование, поворот на 180°, угловой кроп и чистый шум. Это гарантирует, что модель учится различать структуру лица, а не запоминает фоновые артефакты.
 
 
 ```python
-BLOCK_SIZE = 2
-
-def normalize_blocks(cell_hists, block_size=2):
-    n_cy, n_cx, num_bins = cell_hists.shape
-    descriptor = []
-    for by in range(n_cy - block_size + 1):
-        for bx in range(n_cx - block_size + 1):
-            block = cell_hists[by:by+block_size, bx:bx+block_size].flatten()
-            norm  = np.sqrt(np.sum(block**2) + 1e-6)
-            descriptor.append(block / norm)
-    return np.concatenate(descriptor)
-
-def hog_descriptor(image_float, cell_size=8, num_bins=9, block_size=2):
-    gray  = to_gray(image_float)
-    _, _, magnitude, angle = compute_gradients(gray)
-    hists = build_cell_histograms(magnitude, angle, cell_size, num_bins)
-    return normalize_blocks(hists, block_size)
-
-desc_test = hog_descriptor(sample)
-print(f'Размер HOG-дескриптора для патча {sample.shape[0]}×{sample.shape[1]}: {len(desc_test)}')
-```
-
-    Размер HOG-дескриптора для патча 62×47: 864
-
-
-# 4.3 Извлечение признаков
-
-Вычисляем HOG для каждого изображения датасета. Каждое изображение → вектор признаков. Все векторы складываем в матрицу `X_faces` (изображений × признаков).
-
-
-```python
-print('Вычисляем HOG для лиц...')
+TARGET_SIZE = (48, 48)
+print('Вычисляем LBP-дескрипторы')
 X_faces = []
 for i, img in enumerate(images_valid):
-    X_faces.append(hog_descriptor(img))
+    gray = to_gray_manual(img).astype(np.uint8)
+    gray_res = bilinear_resize(gray, TARGET_SIZE[1], TARGET_SIZE[0])
+    X_faces.append(compute_lbp_manual(gray_res))
     if (i+1) % 200 == 0:
-        print(f'  {i+1}/{len(images_valid)}')
+        print(f'  Обработано: {i+1}/{len(images_valid)}')
 
-X_faces  = np.array(X_faces)
-y_gender = gender_labels.copy()
-
-print(f'Матрица признаков: {X_faces.shape}')
+X_faces = np.array(X_faces)
+print(f'Матрица признаков лиц {X_faces.shape}')
 ```
-
-    Вычисляем HOG для лиц...
-      200/2026
-      400/2026
-      600/2026
-      800/2026
-      1000/2026
-      1200/2026
-      1400/2026
-      1600/2026
-      1800/2026
-      2000/2026
-    Матрица признаков: (2026, 864)
-
-
-## Негативные примеры для детектора лицо/не-лицо
-
-Детектору нужно видеть оба класса — и лица, и не-лица. Берём те же фотографии LFW и создаём из них патчи, которые заведомо не являются лицом:
-
-- **вертикальный переворот** — нос смотрит вверх, лоб внизу, структура нарушена
-- **сдвиг вниз + шум сверху** — лоб обрезан, вместо него случайный шум
-- **поворот на 90°** — ориентация полностью нарушена
-- **поворот на 180°** — перевёрнутое лицо, иная градиентная структура
-- **угловой кроп** — угол кадра LFW, там фон или плечи
-- **случайный шум** — никакой структуры вообще
-
-Каждый тип берёт разные исходные изображения, поэтому в train и test попадают разные патчи и SVM не может их просто запомнить.
-
+    Вычисляем LBP-дескрипторы
+        Обработано: 200/2059
+        Обработано: 400/2059
+        Обработано: 600/2059
+        Обработано: 800/2059
+        Обработано: 1000/2059
+        Обработано: 1200/2059
+        Обработано: 1400/2059
+        Обработано: 1600/2059
+        Обработано: 1800/2059
+        Обработано: 2000/2059
+    Матрица признаков лиц (2059, 256)
 
 ```python
-img_h, img_w = lfw.images.shape[1], lfw.images.shape[2]
-N_NEG    = len(images_valid)
-all_imgs = lfw.images
+print('Генерируем синтетические негативы из LFW')
 np.random.seed(42)
+N_NEG = len(images_valid)
+negatives = []
 
-def make_negatives(all_imgs, img_h, img_w, n_total):
-    n_imgs   = len(all_imgs)
+def make_negatives(all_imgs, n_total):
     per_type = n_total // 6 + 1
-    negatives = []
-    idx = np.random.permutation(n_imgs)
-
+    neg_list = []
+    idx = np.random.permutation(len(all_imgs))
+    
     for i in range(per_type):
         patch = all_imgs[idx[i % n_imgs]].copy()
-        negatives.append(patch[::-1, :, :])
-
+        # Вертикальный флип
+        neg_list.append(np.flipud(patch))
     for i in range(per_type):
-        patch   = all_imgs[idx[(i + per_type) % n_imgs]].copy()
-        shift   = max(1, img_h // 3)
-        shifted = np.zeros_like(patch)
-        shifted[shift:, :, :]  = patch[:img_h - shift, :, :]
-        shifted[:shift, :, :]  = np.random.rand(shift, img_w, 3).astype(np.float32)
-        negatives.append(shifted)
-
+        patch = all_imgs[idx[(i+per_type)%n_imgs]].copy()
+        # Сдвиг + шум сверху
+        patch_shifted = np.roll(patch, 20, axis=0)
+        patch_shifted[:20] = np.random.rand(20, patch.shape[1], 3).astype(np.float32)
+        neg_list.append(patch_shifted)
     for i in range(per_type):
-        patch   = all_imgs[idx[(i + 2*per_type) % n_imgs]].copy()
-        rotated = np.transpose(patch, (1, 0, 2))
-        if rotated.shape[0] < img_h or rotated.shape[1] < img_w:
-            rotated = np.pad(rotated, ((0, max(0, img_h-rotated.shape[0])),
-                                       (0, max(0, img_w-rotated.shape[1])),
-                                       (0, 0)), mode='edge')
-        negatives.append(rotated[:img_h, :img_w, :])
-
+        patch = all_imgs[idx[(i+2*per_type)%n_imgs]].copy()
+        # Транспонирование 90 град
+        neg_list.append(np.transpose(patch, (1, 0, 2)))
     for i in range(per_type):
-        patch = all_imgs[idx[(i + 3*per_type) % n_imgs]].copy()
-        negatives.append(patch[::-1, ::-1, :])
-
+        patch = all_imgs[idx[(i+3*per_type)%n_imgs]].copy()
+        # Переворот 180
+        neg_list.append(np.flipud(np.fliplr(patch)))
     for i in range(per_type):
-        src = all_imgs[idx[(i + 4*per_type) % n_imgs]]
-        big = np.kron(src, np.ones((2, 2, 1)))
-        h_b, w_b = big.shape[:2]
-        negatives.append(np.clip(big[h_b-img_h:, w_b-img_w:, :], 0, 1).astype(np.float32))
-
+        patch = all_imgs[idx[(i+4*per_type)%n_imgs]].copy()
+        # Угловой кроп (растягиваем и берём угол)
+        big = np.kron(patch, np.ones((2, 2, 1)))
+        neg_list.append(big[-62:, -47:, :])
     for i in range(per_type):
-        negatives.append(np.random.rand(img_h, img_w, 3).astype(np.float32))
+        # Чистый шум
+        neg_list.append(np.random.rand(62, 47, 3).astype(np.float32))
+        
+    return neg_list[:n_total]
 
-    return negatives[:n_total]
+n_imgs = len(images_valid)
+neg_patches = make_negatives(images_valid, N_NEG)
 
-print('Генерируем негативные примеры (6 типов трансформаций)...')
-neg_patches = make_negatives(all_imgs, img_h, img_w, N_NEG)
-
-print('Вычисляем HOG для негативов...')
+print('Вычисляем LBP для негативов')
 X_neg = []
 for i, patch in enumerate(neg_patches):
-    X_neg.append(hog_descriptor(patch))
+    gray = to_gray_manual(patch).astype(np.uint8)
+    gray_res = bilinear_resize(gray, TARGET_SIZE[1], TARGET_SIZE[0])
+    X_neg.append(compute_lbp_manual(gray_res))
     if (i+1) % 500 == 0:
-        print(f'  {i+1}/{N_NEG}')
+        print(f'  Обработано негативов: {i+1}/{N_NEG}')
 
 X_neg = np.array(X_neg)
 y_neg = np.full(N_NEG, -1)
-
 X_detect = np.vstack([X_faces, X_neg])
 y_detect = np.concatenate([np.ones(len(X_faces), dtype=int), y_neg])
 
-print(f'Всего для детектора: {X_detect.shape}')
-print(f'  лиц: {(y_detect==1).sum()},  не-лиц: {(y_detect==-1).sum()}')
-
-per_type = N_NEG // 6
-labels_types = ['вертик. флип', 'сдвиг вниз', 'поворот 90°', 'поворот 180°', 'угловой кроп', 'шум']
-f, axes = plt.subplots(6, 4, figsize=(10, 14))
-for t in range(6):
-    for j in range(4):
-        axes[t, j].imshow(np.clip(neg_patches[t * per_type + j], 0, 1))
-        axes[t, j].axis('off')
-    axes[t, 0].set_ylabel(labels_types[t], fontsize=9)
-plt.suptitle('Негативные примеры — 6 типов трансформаций')
-plt.tight_layout()
-plt.show()
+print(f'Всего для детектора: {X_detect.shape} (лица: {(y_detect==1).sum()}, не-лица: {(y_detect==-1).sum()})')
 ```
+    Генерируем синтетические негативы из LFW
+    Вычисляем LBP для негативов
+        Обработано негативов: 500/2059
+        Обработано негативов: 1000/2059
+        Обработано негативов: 1500/2059
+        Обработано негативов: 2000/2059
+    Всего для детектора: (4118, 256) (лица: 2059, не-лица: 2059)
 
-    Генерируем негативные примеры (6 типов трансформаций)...
-    Вычисляем HOG для негативов...
-      500/2026
-      1000/2026
-      1500/2026
-      2000/2026
-    Всего для детектора: (4052, 864)
-      лиц: 2026,  не-лиц: 2026
-
-
-
-    
-![png](combined345_files/combined345_44_1.png)
+![png](README_files/Безымянный17.png)
     
 
 
-# 4.4 Обучение SVM
+### 4 Обучение SVM-классификаторов
 
-Обучаем два независимых классификатора.
-
-**Детектор** — бинарный: лицо (+1) или не-лицо (−1). Принимает решение в каждой позиции скользящего окна.
-
-**Классификатор пола** — бинарный: мужчина (0) или женщина (1). Применяется только к патчам, которые детектор уже признал лицом.
-
-Перед обучением масштабируем признаки через `StandardScaler` — вычитаем среднее и делим на стандартное отклонение. Без этого бины с большими значениями будут доминировать и SVM будет работать хуже.
-
-### Детектор лицо/не-лицо
+Перед обучением признаки масштабируются StandardScaler (вычитание среднего, деление на СКО), что критично для линейных SVM. Обучаются две модели:
+1. Детектор лицо/не-лицо (y ∈ {-1, 1})
+2. Классификатор пола (y ∈ {0, 1})
 
 
 ```python
+print('Обучаем детектор лицо / не-лицо')
 X_tr, X_te, y_tr, y_te = train_test_split(
     X_detect, y_detect, test_size=0.2, random_state=42, stratify=y_detect
 )
 
-print('Обучаем детектор...')
 detector_pipe = Pipeline([
     ('scaler', StandardScaler()),
-    ('svm',    LinearSVC(C=0.1, max_iter=2000))
+    ('svm', LinearSVC(C=1.0, max_iter=3000))
 ])
 detector_pipe.fit(X_tr, y_tr)
+y_pred_det = detector_pipe.predict(X_te)
+print(f'Точность детектора: {accuracy_score(y_te, y_pred_det):.3f}')
+print(classification_report(y_te, y_pred_det, target_names=['не-лицо', 'лицо']))
 
-y_pred = detector_pipe.predict(X_te)
-print(f'Точность на тесте: {accuracy_score(y_te, y_pred):.3f}')
-print(classification_report(y_te, y_pred, target_names=['не-лицо', 'лицо']))
-```
-
-    Обучаем детектор...
-    Точность на тесте: 0.994
-                  precision    recall  f1-score   support
-    
-         не-лицо       1.00      0.99      0.99       406
-            лицо       0.99      1.00      0.99       405
-    
-        accuracy                           0.99       811
-       macro avg       0.99      0.99      0.99       811
-    weighted avg       0.99      0.99      0.99       811
-    
-
-
-### Классификатор пола: мужчина / женщина
-
-
-```python
+print('\nОбучаем классификатор пола')
 X_tr_g, X_te_g, y_tr_g, y_te_g = train_test_split(
     X_faces, y_gender, test_size=0.2, random_state=42, stratify=y_gender
 )
 
-print('Обучаем классификатор пола...')
 gender_pipe = Pipeline([
     ('scaler', StandardScaler()),
-    ('svm',    LinearSVC(C=1.0, max_iter=2000))
+    ('svm', LinearSVC(C=1.0, max_iter=3000))
 ])
 gender_pipe.fit(X_tr_g, y_tr_g)
-
 y_pred_g = gender_pipe.predict(X_te_g)
-print(f'Точность на тесте: {accuracy_score(y_te_g, y_pred_g):.3f}')
+print(f'Точность классификатора пола: {accuracy_score(y_te_g, y_pred_g):.3f}')
 print(classification_report(y_te_g, y_pred_g, target_names=['мужчина', 'женщина']))
 
-with open('detector_model.pkl', 'wb') as f:
-    pickle.dump(detector_pipe, f)
-with open('gender_model.pkl', 'wb') as f:
-    pickle.dump(gender_pipe, f)
-print('Модели сохранены.')
+with open('lbp_detector.pkl', 'wb') as f: pickle.dump(detector_pipe, f)
+with open('lbp_gender.pkl', 'wb') as f: pickle.dump(gender_pipe, f)
 ```
 
-    Обучаем классификатор пола...
-    Точность на тесте: 0.943
-                  precision    recall  f1-score   support
-    
-         мужчина       0.97      0.96      0.97       370
-         женщина       0.67      0.72      0.69        36
-    
-        accuracy                           0.94       406
-       macro avg       0.82      0.84      0.83       406
-    weighted avg       0.95      0.94      0.94       406
-    
-    Модели сохранены.
+![png](README_files/Безымянный14.png)
 
 
-    /Users/arseniikostin/cv-labs-sem8/venv/lib/python3.14/site-packages/sklearn/svm/_base.py:1258: ConvergenceWarning: Liblinear failed to converge, increase the number of iterations.
-      warnings.warn(
+### 5 Пирамида масштабов, скользящее окно и NMS
 
-
-# 4.5 Скользящее окно и пирамида масштабов
-
-Детектор обучен на патчах фиксированного размера. Чтобы находить лица разного размера на любом изображении, используем две идеи.
-
-**Пирамида масштабов** — уменьшаем изображение с коэффициентом 0.85 на каждом шаге. На каждом масштабе запускаем скользящее окно. Маленькое окно таким образом «видит» и большие лица — просто уменьшенные.
-
-**Скользящее окно** — перемещаем окно с шагом `step` по строкам и столбцам, для каждой позиции считаем HOG и спрашиваем детектор.
-
-**Non-Maximum Suppression (NMS)** — одно лицо даёт десятки срабатываний в соседних позициях. NMS оставляет только прямоугольник с наибольшей уверенностью из всех перекрывающихся. Перекрытие измеряем через IoU (Intersection over Union):
-
-$$\text{IoU}(A, B) = \frac{|A \cap B|}{|A \cup B|}$$
+Детектор обучен на фиксированном окне 48×48. Для поиска лиц произвольного размера реализуется:
+- Пирамида масштабов: изображение последовательно уменьшается в 0.85 раз.
+- Скользящее окно: окно сдвигается с шагом step по строкам и столбцам.
+- NMS (Non-Maximum Suppression): убираются дублирующиеся прямоугольники. Перекрытие считается через IoU (Intersection over Union), оставляется только окно с наибольшим score.
 
 
 ```python
-def sliding_window(image_uint8, win_h, win_w, step=16):
-    h, w = image_uint8.shape[:2]
-    for r in range(0, h - win_h + 1, step):
-        for c in range(0, w - win_w + 1, step):
-            yield r, c, image_uint8[r:r+win_h, c:c+win_w]
-
-def image_pyramid(image_uint8, scale=0.85, min_size=64):
-    img    = image_uint8.copy()
+def image_pyramid_manual(image_uint8, scale=0.85, min_size=64):
+    img = image_uint8.copy()
     factor = 1.0
     while True:
         yield img, factor
@@ -1857,10 +1436,16 @@ def image_pyramid(image_uint8, scale=0.85, min_size=64):
         new_h, new_w = int(h * scale), int(w * scale)
         if new_h < min_size or new_w < min_size:
             break
-        img    = cv2.resize(img, (new_w, new_h))
+        img = bilinear_resize(img, new_h, new_w)
         factor *= scale
 
-def iou(boxA, boxB):
+def sliding_window_manual(image_uint8, win_h, win_w, step=16):
+    h, w = image_uint8.shape[:2]
+    for r in range(0, h - win_h + 1, step):
+        for c in range(0, w - win_w + 1, step):
+            yield r, c, image_uint8[r:r+win_h, c:c+win_w]
+
+def iou_manual(boxA, boxB):
     r0 = max(boxA[0], boxB[0]); c0 = max(boxA[1], boxB[1])
     r1 = min(boxA[2], boxB[2]); c1 = min(boxA[3], boxB[3])
     inter = max(0, r1-r0) * max(0, c1-c0)
@@ -1869,152 +1454,104 @@ def iou(boxA, boxB):
     union = areaA + areaB - inter
     return inter / union if union > 0 else 0.0
 
-def nms(detections, iou_thresh=0.3):
-    if not detections:
-        return []
+def nms_manual(detections, iou_thresh=0.3):
+    if not detections: return []
     detections = sorted(detections, key=lambda x: x[0], reverse=True)
     kept = []
     while detections:
         best = detections.pop(0)
         kept.append(best)
-        detections = [d for d in detections if iou(best[1:], d[1:]) < iou_thresh]
+        detections = [d for d in detections if iou_manual(best[1:], d[1:]) < iou_thresh]
     return kept
 
-def detect_and_classify(image_uint8, detector, gender_clf,
+def detect_and_classify_lbp(image_uint8, detector, gender_clf,
                         win_h, win_w, step=16, scale=0.85,
                         det_threshold=0.5, iou_thresh=0.3):
     detections = []
-    for img_scaled, factor in image_pyramid(image_uint8, scale=scale):
-        for r, c, patch in sliding_window(img_scaled, win_h, win_w, step):
-            desc  = hog_descriptor(patch.astype(np.float32) / 255.0).reshape(1, -1)
+    for img_scaled, factor in image_pyramid_manual(image_uint8, scale=scale):
+        for r, c, patch in sliding_window_manual(img_scaled, win_h, win_w, step):
+            gray = to_gray_manual(patch).astype(np.uint8)
+            gray_res = bilinear_resize(gray, win_w, win_h)
+            desc = compute_lbp_manual(gray_res).reshape(1, -1)
+            
             score = detector.decision_function(desc)[0]
             if score > det_threshold:
-                r0, c0 = int(r/factor), int(c/factor)
-                r1, c1 = int((r+win_h)/factor), int((c+win_w)/factor)
+                r0 = int(r / factor); c0 = int(c / factor)
+                r1 = int((r+win_h) / factor); c1 = int((c+win_w) / factor)
                 detections.append((score, r0, c0, r1, c1))
-
-    detections = nms(detections, iou_thresh)
-
+                
+    detections = nms_manual(detections, iou_thresh)
+    
     results = []
     for score, r0, c0, r1, c1 in detections:
         crop = image_uint8[r0:r1, c0:c1]
-        if crop.size == 0:
-            continue
-        face_f = cv2.resize(crop, (win_w, win_h)).astype(np.float32) / 255.0
-        gender = gender_clf.predict(hog_descriptor(face_f).reshape(1, -1))[0]
+        if crop.size == 0: continue
+        gray = to_gray_manual(crop).astype(np.uint8)
+        gray_res = bilinear_resize(gray, win_w, win_h)
+        desc = compute_lbp_manual(gray_res).reshape(1, -1)
+        gender = gender_clf.predict(desc)[0]
         results.append((r0, c0, r1, c1, gender))
-
     return results
-
-WIN_H = images_valid.shape[1]
-WIN_W = images_valid.shape[2]
-print(f'Размер окна детектора: {WIN_H}×{WIN_W} пикселей')
 ```
 
-    Размер окна детектора: 62×47 пикселей
 
+### 6 Визуализация и тестирование
 
-# 4.6 Тестирование на фотографиях
-
-Берём случайные изображения из тестовой выборки (те, что модель не видела при обучении) и классифицируем пол. Рамка красная — мужчина, синяя — женщина.
+Для проверки качества случайно выбираются изображения из тестовой выборки. Рамка окрашивается в красный (мужчина) или синий (женщина).
 
 
 ```python
 test_imgs_idx = np.random.choice(len(X_te_g), 4, replace=False)
-
-f, axes = plt.subplots(1, 4, figsize=(18, 5))
+f, axes = plt.subplots(1, 4, figsize=(16, 4))
 for i, idx in enumerate(test_imgs_idx):
     orig_idx = valid_indices[idx]
-    image_u8 = (lfw.images[orig_idx] * 255).astype(np.uint8)
-
-    pred_g = gender_pipe.predict(X_faces[idx].reshape(1, -1))[0]
-    true_g = y_gender[idx]
-
-    color_border = [255, 0, 0] if pred_g == 0 else [0, 0, 255]
-    img_show = image_u8.copy()
-    img_show[0:4, :]  = color_border
-    img_show[-4:, :]  = color_border
-    img_show[:, 0:4]  = color_border
-    img_show[:, -4:]  = color_border
-
-    label_pred = 'Муж' if pred_g == 0 else 'Жен'
-    label_true = 'Муж' if true_g == 0 else 'Жен'
-
-    axes[i].imshow(img_show)
-    axes[i].set_title(f'Предсказание: {label_pred}\nИстина: {label_true}', fontsize=10)
+    img = (lfw.images[orig_idx] * 255).astype(np.uint8)
+    pred = gender_pipe.predict(X_faces[idx].reshape(1, -1))[0]
+    true = y_gender[idx]
+    color = [255, 0, 0] if pred == 0 else [0, 0, 255]
+    img_vis = img.copy()
+    img_vis[:3, :] = img_vis[-3:, :] = img_vis[:, :3] = img_vis[:, -3:] = color
+    axes[i].imshow(img_vis)
+    axes[i].set_title(f'Предсказание: {"Муж" if pred==0 else "Жен"}\nИстина: {"Муж" if true==0 else "Жен"}')
     axes[i].axis('off')
-
-plt.suptitle('Классификация пола (красный — мужчина, синий — женщина)')
-plt.tight_layout()
-plt.show()
+plt.suptitle('LBP + SVM: Классификация пола на тесте')
+plt.tight_layout(); plt.show()
 ```
 
-
-    
-![png](combined345_files/combined345_53_0.png)
-    
+![png](README_files/Безымянный16.png)
 
 
-# 4.7 Детектирование в реальном времени с веб-камеры
-
-Живая камера вынесена в отдельный скрипт `live_camera.py` — он открывает окно cv2 и работает пока не нажать **Q**. Перед запуском убедитесь, что ячейка 4.4 выполнена и файлы `detector_model.pkl`, `gender_model.pkl` сохранены в папке с лабами.
-
-**Запуск из терминала:**
-```bash
-python live_camera.py
-```
-
-Параметры в начале скрипта: `CAM_INDEX`, `DET_THRESHOLD`, `STEP`, `SCALE_DOWN`.
-
-# 4.8 Оценка качества
-
+### 7 Оценка качества
 Строим матрицы ошибок для обоих классификаторов на тестовой выборке.
 
 
 ```python
-from sklearn.metrics import confusion_matrix
-
 y_pred_det = detector_pipe.predict(X_te)
-cm_det     = confusion_matrix(y_te, y_pred_det, labels=[-1, 1])
-
+cm_det = confusion_matrix(y_te, y_pred_det, labels=[-1, 1])
 y_pred_gen = gender_pipe.predict(X_te_g)
-cm_gen     = confusion_matrix(y_te_g, y_pred_gen, labels=[0, 1])
+cm_gen = confusion_matrix(y_te_g, y_pred_gen, labels=[0, 1])
 
 f, axes = plt.subplots(1, 2, figsize=(12, 5))
 for ax, cm, title, labels in [
     (axes[0], cm_det, 'Детектор лицо / не-лицо', ['не-лицо', 'лицо']),
-    (axes[1], cm_gen, 'Классификатор пола',       ['мужчина', 'женщина'])
+    (axes[1], cm_gen, 'Классификатор пола', ['мужчина', 'женщина'])
 ]:
     ax.imshow(cm, interpolation='nearest', cmap='Blues')
-    ax.set_title(title)
-    ax.set_xticks([0, 1]); ax.set_xticklabels(labels)
+    ax.set_title(title); ax.set_xticks([0, 1]); ax.set_xticklabels(labels)
     ax.set_yticks([0, 1]); ax.set_yticklabels(labels)
-    ax.set_ylabel('Истина')
-    ax.set_xlabel('Предсказание')
+    ax.set_ylabel('Истина'); ax.set_xlabel('Предсказание')
     for i in range(2):
         for j in range(2):
             ax.text(j, i, str(cm[i, j]), ha='center', va='center',
                     color='white' if cm[i, j] > cm.max()/2 else 'black', fontsize=14)
-
-plt.tight_layout()
-plt.show()
+plt.tight_layout(); plt.show()
 
 print(f'Точность детектора:           {accuracy_score(y_te, y_pred_det):.3f}')
 print(f'Точность классификатора пола: {accuracy_score(y_te_g, y_pred_gen):.3f}')
 ```
 
-
-    
-![png](combined345_files/combined345_56_0.png)
-    
-
-
-    Точность детектора:           0.994
-    Точность классификатора пола: 0.943
-
+![png](README_files/Безымянный15.png)
 
 # Вывод
 
-В ходе лабораторной работы реализован полный конвейер детектирования лиц и классификации пола на основе HOG + Linear SVM.
-
-HOG-дескриптор вычисляется вручную: градиенты через центральные разности (как в лабе 2), гистограммы ориентаций по ячейкам, блочная L2-нормировка. Детектор на LinearSVC разделяет патчи на «лицо» и «не-лицо», второй SVM классифицирует пол. Для локализации лиц применяется пирамида масштабов и скользящее окно, дублирующиеся срабатывания убираются NMS по порогу IoU. Негативные примеры синтезируются из самого датасета через 6 типов трансформаций, что обеспечивает реальную разнообразность и корректные метрики.
+В ходе лабораторной работы реализован полный конвейер детектирования лиц и классификации пола на основе LBP + Linear SVM. Все операции предобработки, извлечения признаков и постобработки написаны вручную без использования готовых CV-библиотек. Синтетические негативы обеспечивают сбалансированность классов и повышают обобщающую способность детектора.
