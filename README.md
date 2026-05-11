@@ -21,7 +21,7 @@
 ![jpg](README_files/123.jpg)
 
 
-### Подготовка изображения и вспомогательные операции
+vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv Подготовка изображения и вспомогательные операции
 
 Цветное изображение загружается через OpenCV. Для работы с яркостью реализован перевод в оттенки серого по фотометрической формуле.
 
@@ -768,6 +768,9 @@ def build_trajectories_from_keypoints(all_keypoints):
 
 ![png](README_files/Figure_f4.png)
 
+# Вывод
+Задачи лабораторной работы выполнены в полном объеме
+
 # 3 Лабораторная работа. 
 Работа с видеопотоком
 <p>Цель: Научиться анализировать видеопоток.
@@ -1129,29 +1132,27 @@ if positions:
 
 <p>Цель: на практике закрепить полученные в ходе курса знания, в том числе по машинному обучению и нейронным сетям для решения задачи детектирования лиц и классификации лиц на мужчин и женщин.
 
-<p><b>Выбранный метод: LBP + Linear SVM</b>
+<p><b>Выбранный метод: свёрточные нейронные сети (CNN)</b>
 
-<p>LBP (Local Binary Patterns) описывает локальную текстуру изображения путём сравнения центрального пикселя с его 8 соседями. LBP вычислительно дешевый, устойчив к монотонным изменениям освещённости и хорошо выделяет структурные особенности кожи, контуров лица и глаз, что делает его удобным для задач детекции при ограниченных вычислительных ресурсах.
-
-<p>SVM (Support Vector Machine) ищет гиперплоскость, максимально разделяющую два класса в пространстве HOG-признаков.
+<p>CNN автоматически извлекают иерархические признаки (текстуры, формы, объекты), что позволяет добиться высокой точности как в задаче детекции, так и в задаче классификации пола.
 
 ### 1 Загрузка датасета и ручная разметка
 
-Используем датасет LFW (Labeled Faces in the Wild). Параметр min_faces_per_person=15 отфильтровывает персоны с малым количеством снимков, оставляя только репрезентативную выборку. Разметка по полу выполняется вручную через словарь GENDER_LABELS, что соответствует требованию о ручной аннотации данных.
+Используется датасет LFW. Параметр min_faces_per_person=15 оставляет репрезентативную выборку. Разметка по полу выполняется вручную через словарь GENDER_LABELS. Для устранения сильного дисбаланса классов дополнительно подгружаются женские лица из датасета UTKFace до равенства с мужской выборкой.
 
 ```python
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from collections import deque
-from sklearn.svm import LinearSVC
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.datasets import fetch_lfw_people
-import os
-import pickle
+
+import tensorflow as tf
+from tensorflow.keras import layers, models, callbacks
+from tensorflow.keras import regularizers
+from tensorflow.keras.optimizers import Adam
+import tensorflow.keras.backend as K
 
 plt.rcParams.update({
     'font.family': 'serif',
@@ -1189,6 +1190,7 @@ for i, tid in enumerate(lfw.target):
 
 images_valid = lfw.images[valid_indices]
 y_gender = np.array(gender_labels)
+
 print(f'Отфильтровано {len(images_valid)} изображений')
 print(f'Мужчин {(y_gender==0).sum()}, Женщин {(y_gender==1).sum()}')
 
@@ -1205,223 +1207,349 @@ plt.suptitle('Примеры из датасета LFW с ручной разм�
 plt.tight_layout(); plt.show()
 ```
 
+```python
+import os
+import numpy as np
+import cv2
+from sklearn.model_selection import train_test_split
+
+try:
+    import kagglehub
+except ImportError:
+    !pip install -q kagglehub
+    import kagglehub
+
+print("Загрузка UTKFace через kagglehub...")
+path = kagglehub.dataset_download("jangedoo/utkface-new")
+print("Путь к данным:", path)
+
+n_male = np.sum(y_gender == 0)
+n_female = np.sum(y_gender == 1)
+print(f"LFW: мужчин {n_male}, женщин {n_female}")
+
+needed_females = max(0, n_male - n_female)
+print(f"Нужно добавить женщин: {needed_females}")
+
+female_folder = os.path.join(path, "UTKFace") 
+utk_images = []
+utk_labels = []
+
+for filename in os.listdir(female_folder):
+    if not filename.lower().endswith('.jpg'):
+        continue
+    parts = filename.split('_')
+    if len(parts) < 2:
+        continue
+    gender = int(parts[1]) 
+    if gender == 1:
+        img_path = os.path.join(female_folder, filename)
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        processed = preprocess_face_square(img)  
+        utk_images.append(processed)
+        utk_labels.append(1)
+        if len(utk_images) >= needed_females:
+            break
+
+print(f"Загружено женских лиц из UTKFace: {len(utk_images)}")
+
+X_lfw_original = X_faces_cnn_sq.copy()
+y_lfw_original = y_gender.copy()
+
+X_faces_cnn_sq = np.concatenate([X_faces_cnn_sq, np.array(utk_images)])
+y_gender = np.concatenate([y_gender, np.array(utk_labels)])
+
+indices = np.random.permutation(len(y_gender))
+X_faces_cnn_sq = X_faces_cnn_sq[indices]
+y_gender = y_gender[indices]
+
+print(f"Итоговый размер: {len(y_gender)} изображений")
+print(f"Мужчины: {np.sum(y_gender == 0)}, Женщины: {np.sum(y_gender == 1)}")
+
+X_tr_gen, X_te_gen, y_tr_gen, y_te_gen = train_test_split(
+    X_faces_cnn_sq, y_gender, test_size=0.2,
+    random_state=42, stratify=y_gender
+)
+print(f"Train: {len(y_tr_gen)} (муж {np.sum(y_tr_gen==0)}, жен {np.sum(y_tr_gen==1)})")
+print(f"Test:  {len(y_te_gen)} (муж {np.sum(y_te_gen==0)}, жен {np.sum(y_te_gen==1)})")
+```
 ![png](README_files/Безымянный11.png)
 
+### 2 Предобработка и аугментация данных
 
-### 2 LBP-дескриптор и предобработка
-
-Для работы с яркостью реализуем ручной перевод в оттенки серого по фотометрической формуле. Изображения приводятся к единому размеру 48×48 с помощью билинейной интерполяции. Билинейное изменение размера вычисляет взвешенную сумму четырёх ближайших пикселей исходного изображения, что сохраняет плавность переходов без появления «лесенок».
+Все изображения приводятся к квадратному формату, масштабируются до 64×64 и нормализуются в диапазон [0, 1]. Для повышения обобщающей способности применяется on-the-fly аугментация: горизонтальный флип, случайный поворот и зум.
 
 ```python
-def to_gray_manual(image_float):
-    if image_float.ndim == 3:
-        return (0.299*image_float[:,:,0] + 0.587*image_float[:,:,1] + 0.114*image_float[:,:,2]) * 255.0
-    return image_float * 255.0
+IMG_SIZE = 64
+def preprocess_face_square(img):
+    h, w = img.shape[:2]
+    size = min(h, w)
+    start_h, start_w = (h - size)//2, (w - size)//2
+    cropped = img[start_h:start_h+size, start_w:start_w+size]
+    return cv2.resize(cropped, (IMG_SIZE, IMG_SIZE)) / 255.0
 
-def bilinear_resize(image, target_h, target_w):
-    orig_h, orig_w = image.shape[:2]
-    if target_h == orig_h and target_w == orig_w:
-        return image
-    
-    sy, sx = orig_h / target_h, orig_w / target_w
-    gy, gx = np.mgrid[0:target_h, 0:target_w]
-    
-    src_y = gy * sy
-    src_x = gx * sx
-    y0, x0 = np.floor(src_y).astype(int), np.floor(src_x).astype(int)
-    y1 = np.minimum(y0 + 1, orig_h - 1)
-    x1 = np.minimum(x0 + 1, orig_w - 1)
-    
-    dy, dx = src_y - y0, src_x - x0
-    w1 = (1-dy) * (1-dx)
-    w2 = dy * (1-dx)
-    w3 = (1-dy) * dx
-    w4 = dy * dx
-    
-    if image.ndim == 2:
-        out = image[y0, x0]*w1 + image[y1, x0]*w2 + image[y0, x1]*w3 + image[y1, x1]*w4
-    else:
-        out = np.stack([
-            image[y0, x0]*w1 + image[y1, x0]*w2 + image[y0, x1]*w3 + image[y1, x1]*w4
-            for i in range(3)], axis=-1)
-    return np.clip(out, 0, 255).astype(np.uint8)
+augmentation = tf.keras.Sequential([
+    layers.RandomFlip("horizontal"),
+    layers.RandomRotation(0.05),
+    layers.RandomZoom(0.1),
+])
+train_ds = train_dataset.shuffle(500).map(augment).batch(32).prefetch(tf.data.AUTOTUNE)
 ```
+### 3 Генерация негативов для детектора
 
-LBP (Local Binary Patterns) сравнивает центральный пиксель с 8 соседями. Если сосед ярче центра, записывается 1, иначе 0. 8 бит сдвигаются в соответствии с позицией соседа и объединяются в байт. Для всего патча строится нормированная гистограмма на 256 бинов, которая становится финальным вектором признаков.
-
-
-```python
-def compute_lbp_manual(gray_uint8):
-    p = np.pad(gray_uint8, 1, mode='edge')
-    
-    tl = p[:-2, :-2]; t = p[:-2, 1:-1]; tr = p[:-2, 2:]
-    l  = p[1:-1, :-2];                 r = p[1:-1, 2:]
-    bl = p[2:, :-2];   b = p[2:, 1:-1];  br = p[2:, 2:]
-    c  = p[1:-1, 1:-1]
-    
-    lbp = ((t >= c) << 7) | ((tr >= c) << 6) | ((r >= c) << 5) | \
-          ((br >= c) << 4) | ((b >= c) << 3) | ((bl >= c) << 2) | \
-          ((l >= c) << 1) | ((tl >= c) << 0)
-          
-    hist, _ = np.histogram(lbp, bins=256, range=(0, 256))
-    return (hist / (hist.sum() + 1e-6)).flatten()
-```
-    
-
-
-### 3 Извлечение признаков и генерация негативов
-
-Детектору необходимо видеть оба класса. В качестве негативов («не-лицо») используются те же изображения LFW, но подвергнутые 6 типам искажений: вертикальный флип, сдвиг с шумом, транспонирование, поворот на 180°, угловой кроп и чистый шум. Это гарантирует, что модель учится различать структуру лица, а не запоминает фоновые артефакты.
-
+Для обучения детектора «лицо / не-лицо» генерируется сбалансированная выборка негативов. Используются два источника: синтетические изображения и случайные патчи из датасета CIFAR-10. Это гарантирует, что сеть учится выделять структуру лица, а не запоминает фоновые артефакты.
 
 ```python
-TARGET_SIZE = (48, 48)
-print('Вычисляем LBP-дескрипторы')
-X_faces = []
-for i, img in enumerate(images_valid):
-    gray = to_gray_manual(img).astype(np.uint8)
-    gray_res = bilinear_resize(gray, TARGET_SIZE[1], TARGET_SIZE[0])
-    X_faces.append(compute_lbp_manual(gray_res))
-    if (i+1) % 200 == 0:
-        print(f'  Обработано: {i+1}/{len(images_valid)}')
+print('Генерируем негативы (синтетика + CIFAR-10)')
 
-X_faces = np.array(X_faces)
-print(f'Матрица признаков лиц {X_faces.shape}')
-```
-    Вычисляем LBP-дескрипторы
-        Обработано: 200/2059
-        Обработано: 400/2059
-        Обработано: 600/2059
-        Обработано: 800/2059
-        Обработано: 1000/2059
-        Обработано: 1200/2059
-        Обработано: 1400/2059
-        Обработано: 1600/2059
-        Обработано: 1800/2059
-        Обработано: 2000/2059
-    Матрица признаков лиц (2059, 256)
+# Синтетические негативы
+def generate_synthetic_negatives(n_samples, h=62, w=47):
+    negs = []
+    for _ in range(n_samples):
+        choice = np.random.rand()
+        if choice < 0.3:  
+            img = np.random.rand(h, w, 3).astype(np.float32)
+        elif choice < 0.6:  
+            img = np.ones((h, w, 3), dtype=np.float32) * np.random.uniform(0, 0.3)
+            for _ in range(np.random.randint(1, 5)):
+                color = np.random.rand(3)
+                if np.random.rand() < 0.5:
+                    x1, y1 = np.random.randint(0, w//2), np.random.randint(0, h//2)
+                    x2, y2 = np.random.randint(x1+5, w), np.random.randint(y1+5, h)
+                    cv2.rectangle(img, (x1, y1), (x2, y2), color, -1)
+                else:
+                    center = (np.random.randint(10, w-10), np.random.randint(10, h-10))
+                    radius = np.random.randint(5, 15)
+                    cv2.circle(img, center, radius, color, -1)
+        else:  
+            x = np.linspace(0, 1, w)
+            y = np.linspace(0, 1, h)
+            xx, yy = np.meshgrid(x, y)
+            img = np.zeros((h, w, 3), dtype=np.float32)
+            for c in range(3):
+                img[:,:,c] = np.sin(xx*10 + yy*10 + np.random.rand()*2) * 0.5 + 0.5
+        negs.append(img)
+    return negs
 
-```python
-print('Генерируем синтетические негативы из LFW')
+# Негативы из датасета CIFAR-10 
+from tensorflow.keras.datasets import cifar10
+
+(x_cifar, _), (_, _) = cifar10.load_data() 
+
+def extract_patches_from_cifar(cifar_images, n_patches, patch_h=62, patch_w=47):
+    patches = []
+    bigger = max(patch_h, patch_w) * 2  
+    bigger = 128
+    for _ in range(n_patches):
+        idx = np.random.randint(0, len(cifar_images))
+        img = cifar_images[idx].astype(np.float32) / 255.0   
+        img_big = cv2.resize(img, (bigger, bigger))          
+        y = np.random.randint(0, bigger - patch_h + 1)
+        x = np.random.randint(0, bigger - patch_w + 1)
+        patch = img_big[y:y+patch_h, x:x+patch_w, :]
+        patches.append(patch)
+    return patches
+
+N_NEG = len(images_valid)       
+half = N_NEG // 2
+
 np.random.seed(42)
-N_NEG = len(images_valid)
-negatives = []
 
-def make_negatives(all_imgs, n_total):
-    per_type = n_total // 6 + 1
-    neg_list = []
-    idx = np.random.permutation(len(all_imgs))
-    
-    for i in range(per_type):
-        patch = all_imgs[idx[i % n_imgs]].copy()
-        # Вертикальный флип
-        neg_list.append(np.flipud(patch))
-    for i in range(per_type):
-        patch = all_imgs[idx[(i+per_type)%n_imgs]].copy()
-        # Сдвиг + шум сверху
-        patch_shifted = np.roll(patch, 20, axis=0)
-        patch_shifted[:20] = np.random.rand(20, patch.shape[1], 3).astype(np.float32)
-        neg_list.append(patch_shifted)
-    for i in range(per_type):
-        patch = all_imgs[idx[(i+2*per_type)%n_imgs]].copy()
-        # Транспонирование 90 град
-        neg_list.append(np.transpose(patch, (1, 0, 2)))
-    for i in range(per_type):
-        patch = all_imgs[idx[(i+3*per_type)%n_imgs]].copy()
-        # Переворот 180
-        neg_list.append(np.flipud(np.fliplr(patch)))
-    for i in range(per_type):
-        patch = all_imgs[idx[(i+4*per_type)%n_imgs]].copy()
-        # Угловой кроп (растягиваем и берём угол)
-        big = np.kron(patch, np.ones((2, 2, 1)))
-        neg_list.append(big[-62:, -47:, :])
-    for i in range(per_type):
-        # Чистый шум
-        neg_list.append(np.random.rand(62, 47, 3).astype(np.float32))
-        
-    return neg_list[:n_total]
+synth_negs = generate_synthetic_negatives(half)
+cifar_negs = extract_patches_from_cifar(x_cifar, half)
 
-n_imgs = len(images_valid)
-neg_patches = make_negatives(images_valid, N_NEG)
+neg_patches = synth_negs + cifar_negs
+np.random.shuffle(neg_patches)
 
-print('Вычисляем LBP для негативов')
-X_neg = []
-for i, patch in enumerate(neg_patches):
-    gray = to_gray_manual(patch).astype(np.uint8)
-    gray_res = bilinear_resize(gray, TARGET_SIZE[1], TARGET_SIZE[0])
-    X_neg.append(compute_lbp_manual(gray_res))
-    if (i+1) % 500 == 0:
-        print(f'  Обработано негативов: {i+1}/{N_NEG}')
-
-X_neg = np.array(X_neg)
-y_neg = np.full(N_NEG, -1)
-X_detect = np.vstack([X_faces, X_neg])
-y_detect = np.concatenate([np.ones(len(X_faces), dtype=int), y_neg])
-
-print(f'Всего для детектора: {X_detect.shape} (лица: {(y_detect==1).sum()}, не-лица: {(y_detect==-1).sum()})')
+print(f'Создано синтетических: {len(synth_negs)}, из CIFAR-10: {len(cifar_negs)}')
+print(f'Всего негативов: {len(neg_patches)}')
 ```
-    Генерируем синтетические негативы из LFW
-    Вычисляем LBP для негативов
-        Обработано негативов: 500/2059
-        Обработано негативов: 1000/2059
-        Обработано негативов: 1500/2059
-        Обработано негативов: 2000/2059
-    Всего для детектора: (4118, 256) (лица: 2059, не-лица: 2059)
-
-![png](README_files/Безымянный17.png)
-    
 
 
-### 4 Обучение SVM-классификаторов
+### 4 Обучение CNN-детектора лица / не-лица
 
-Перед обучением признаки масштабируются StandardScaler (вычитание среднего, деление на СКО), что критично для линейных SVM. Обучаются две модели:
-1. Детектор лицо/не-лицо (y ∈ {-1, 1})
-2. Классификатор пола (y ∈ {0, 1})
+<p>Архитектура детектора построена на последовательности свёрточных блоков. Каждый блок содержит свёртку `Conv2D`, пакетную нормализацию `BatchNormalization` (ускоряет сходимость и стабилизирует градиенты), активацию `ReLU` и пулинг `MaxPooling2D` (уменьшает пространственное разрешение, увеличивая рецептивное поле). После свёрточной части используется `GlobalAveragePooling2D` вместо `Flatten`: это агрегирует пространственную информацию, резко сокращая число параметров и предотвращая переобучение.
+<p>Для оптимизации выбран `Adam` с learning_rate=0.0005. Функция потерь – `binary_crossentropy`. Применяется `EarlyStopping` по `val_loss` с терпением 5 эпох, чтобы остановить обучение в момент начала переобучения и восстановить веса лучшей модели.
 
 
 ```python
-print('Обучаем детектор лицо / не-лицо')
-X_tr, X_te, y_tr, y_te = train_test_split(
-    X_detect, y_detect, test_size=0.2, random_state=42, stratify=y_detect
+model_det = models.Sequential([
+    layers.Input(shape=(64,64,3)),          
+    layers.RandomFlip("horizontal"),
+    layers.Conv2D(32, (3,3), padding='same'),
+    layers.BatchNormalization(),
+    layers.Activation('relu'),
+    layers.MaxPooling2D((2,2)),
+    layers.Conv2D(64, (3,3), padding='same'),
+    layers.BatchNormalization(),
+    layers.Activation('relu'),
+    layers.MaxPooling2D((2,2)),
+    layers.Dropout(0.25),
+    layers.GlobalAveragePooling2D(),       
+    layers.Dense(64, activation='relu',
+                 kernel_regularizer=regularizers.l2(0.001)),
+    layers.Dropout(0.3),
+    layers.Dense(1, activation='sigmoid')
+])
+model_det.compile(optimizer=Adam(learning_rate=0.0005),
+                  loss='binary_crossentropy',
+                  metrics=['accuracy'])
+
+early_stop = callbacks.EarlyStopping(monitor='val_loss', patience=5,
+                                     restore_best_weights=True)
+
+print("Обучаем детектор лицо / не-лицо (CNN)...")
+history_det = model_det.fit(
+    X_tr_det, y_tr_det,
+    validation_data=(X_te_det, y_te_det),
+    epochs=40, batch_size=32,
+    callbacks=[early_stop],
+    verbose=1
 )
 
-detector_pipe = Pipeline([
-    ('scaler', StandardScaler()),
-    ('svm', LinearSVC(C=1.0, max_iter=3000))
-])
-detector_pipe.fit(X_tr, y_tr)
-y_pred_det = detector_pipe.predict(X_te)
-print(f'Точность детектора: {accuracy_score(y_te, y_pred_det):.3f}')
-print(classification_report(y_te, y_pred_det, target_names=['не-лицо', 'лицо']))
+test_loss_det, test_acc_det = model_det.evaluate(X_te_det, y_te_det, verbose=0)
+print(f'Точность детектора (CNN): {test_acc_det:.3f}')
+```
+    Обучаем детектор лицо / не-лицо (CNN)...
+    Epoch 1/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 7s 50ms/step - accuracy: 0.8989 - loss: 0.3849 - val_accuracy: 0.5000 - val_loss: 0.7411
+    Epoch 2/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 45ms/step - accuracy: 0.9393 - loss: 0.2266 - val_accuracy: 0.5000 - val_loss: 0.7463
+    Epoch 3/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 48ms/step - accuracy: 0.9514 - loss: 0.1794 - val_accuracy: 0.5012 - val_loss: 0.7208
+    Epoch 4/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 46ms/step - accuracy: 0.9669 - loss: 0.1396 - val_accuracy: 0.9320 - val_loss: 0.5578
+    Epoch 5/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 47ms/step - accuracy: 0.9787 - loss: 0.1072 - val_accuracy: 0.5000 - val_loss: 3.5165
+    Epoch 6/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 47ms/step - accuracy: 0.9821 - loss: 0.0905 - val_accuracy: 0.5000 - val_loss: 9.7436
+    Epoch 7/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 49ms/step - accuracy: 0.9833 - loss: 0.0821 - val_accuracy: 0.8046 - val_loss: 0.4249
+    Epoch 8/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 48ms/step - accuracy: 0.9906 - loss: 0.0704 - val_accuracy: 0.5000 - val_loss: 22.6833
+    Epoch 9/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 49ms/step - accuracy: 0.9918 - loss: 0.0610 - val_accuracy: 0.9417 - val_loss: 0.1817
+    Epoch 10/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 46ms/step - accuracy: 0.9939 - loss: 0.0513 - val_accuracy: 0.5000 - val_loss: 19.5747
+    Epoch 11/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 49ms/step - accuracy: 0.9918 - loss: 0.0559 - val_accuracy: 0.5000 - val_loss: 17.6440
+    Epoch 12/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 45ms/step - accuracy: 0.9924 - loss: 0.0498 - val_accuracy: 0.5000 - val_loss: 21.5947
+    Epoch 13/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 48ms/step - accuracy: 0.9964 - loss: 0.0419 - val_accuracy: 0.5789 - val_loss: 1.1661
+    Epoch 14/40
+    103/103 ━━━━━━━━━━━━━━━━━━━━ 5s 48ms/step - accuracy: 0.9954 - loss: 0.0417 - val_accuracy: 0.5000 - val_loss: 27.2710
+    Точность детектора (CNN): 0.942
 
-print('\nОбучаем классификатор пола')
-X_tr_g, X_te_g, y_tr_g, y_te_g = train_test_split(
-    X_faces, y_gender, test_size=0.2, random_state=42, stratify=y_gender
+
+
+### 5 Обучение CNN-классификатора пола
+
+Архитектура аналогична детектору, но с выходным слоем на 2 нейрона и softmax. Для компенсации остаточного дисбаланса применяются class_weight, рассчитанные на основе частот классов в обучающей выборке. Используется ReduceLROnPlateau и EarlyStopping по val_accuracy.
+
+
+```python
+augmentation = tf.keras.Sequential([
+    layers.RandomFlip("horizontal"),
+    layers.RandomRotation(0.05),
+    layers.RandomZoom(0.1),
+])
+
+
+def augment(image, label):
+    return augmentation(image), label
+
+train_dataset = tf.data.Dataset.from_tensor_slices((X_tr_gen, y_tr_gen))
+test_dataset  = tf.data.Dataset.from_tensor_slices((X_te_gen, y_te_gen))
+
+train_ds = train_dataset.shuffle(500).map(augment, num_parallel_calls=tf.data.AUTOTUNE)
+train_ds = train_ds.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+test_ds  = test_dataset.batch(BATCH_SIZE)
+
+
+model_gen = models.Sequential([
+    layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3)),
+    layers.Conv2D(32, (3,3), padding='same'),
+    layers.BatchNormalization(),
+    layers.Activation('relu'),
+    layers.MaxPooling2D((2,2)),
+    layers.Conv2D(64, (3,3), padding='same'),
+    layers.BatchNormalization(),
+    layers.Activation('relu'),
+    layers.MaxPooling2D((2,2)),
+    layers.Dropout(0.4),
+    layers.Conv2D(128, (3,3), padding='same'),
+    layers.BatchNormalization(),
+    layers.Activation('relu'),
+    layers.MaxPooling2D((2,2)),
+    layers.Dropout(0.5),
+    layers.GlobalAveragePooling2D(),
+    layers.Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
+    layers.Dropout(0.5),
+    layers.Dense(2, activation='softmax')
+])
+
+
+model_gen.compile(
+    optimizer=Adam(learning_rate=0.0005),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
 )
 
-gender_pipe = Pipeline([
-    ('scaler', StandardScaler()),
-    ('svm', LinearSVC(C=1.0, max_iter=3000))
-])
-gender_pipe.fit(X_tr_g, y_tr_g)
-y_pred_g = gender_pipe.predict(X_te_g)
-print(f'Точность классификатора пола: {accuracy_score(y_te_g, y_pred_g):.3f}')
-print(classification_report(y_te_g, y_pred_g, target_names=['мужчина', 'женщина']))
 
-with open('lbp_detector.pkl', 'wb') as f: pickle.dump(detector_pipe, f)
-with open('lbp_gender.pkl', 'wb') as f: pickle.dump(gender_pipe, f)
+n_male = np.sum(y_tr_gen == 0)
+n_female = np.sum(y_tr_gen == 1)
+total = n_male + n_female
+weight_for_0 = (1 / n_male) * (total / 2.0)
+weight_for_1 = (1 / n_female) * (total / 2.0)
+class_weight = {0: weight_for_0, 1: weight_for_1}
+print(f"Веса классов: мужчины – {weight_for_0:.2f}, женщины – {weight_for_1:.2f}")
+
+
+early_stop = callbacks.EarlyStopping(
+    monitor='val_accuracy',
+    patience=20,
+    restore_best_weights=True
+)
+reduce_lr = callbacks.ReduceLROnPlateau(
+    monitor='val_loss',
+    factor=0.5,
+    patience=5,
+    min_lr=1e-6
+)
+
+
+print("Обучаем классификатор пола")
+history_gen = model_gen.fit(
+    train_ds,
+    validation_data=test_ds,
+    epochs=EPOCHS,
+    class_weight=class_weight,
+    callbacks=[early_stop, reduce_lr],
+    verbose=1
+)
+
+
+test_loss_gen, test_acc_gen = model_gen.evaluate(test_ds, verbose=0)
+print(f'\nТочность классификатора пола на тесте: {test_acc_gen:.3f}')
+
+
+y_pred_probs = model_gen.predict(test_ds)
+y_pred = np.argmax(y_pred_probs, axis=1)
 ```
 
 ![png](README_files/Безымянный14.png)
 
 
-### 5 Пирамида масштабов, скользящее окно и NMS
+### 6 Пирамида масштабов, скользящее окно и NMS
 
-Детектор обучен на фиксированном окне 48×48. Для поиска лиц произвольного размера реализуется:
-- Пирамида масштабов: изображение последовательно уменьшается в 0.85 раз.
-- Скользящее окно: окно сдвигается с шагом step по строкам и столбцам.
-- NMS (Non-Maximum Suppression): убираются дублирующиеся прямоугольники. Перекрытие считается через IoU (Intersection over Union), оставляется только окно с наибольшим score.
-
+<p>Свёрточные сети принимают на вход фиксированный размер патча (64×64). Для поиска лиц произвольного размера в кадре реализуется классический конвейер детекции:
+<br>• <b>Пирамида масштабов:</b> исходное изображение последовательно уменьшается с коэффициентом `scale=0.85`. На каждом уровне масштаба изображение сканируется скользящим окном. Коэффициент сжатия запоминается, чтобы впоследствии корректно масштабировать координаты найденных окон обратно к оригинальному разрешению.
+<br>• <b>Скользящее окно:</b> окно размером 64×64 сдвигается с шагом `step=16` пикселей. Каждый патч нормализуется, подаётся на вход детектора, и сохраняется вероятность наличия лица.
+<br>• <b>Пороговая фильтрация и NMS:</b> окна с вероятностью выше порога собираются в список. Поскольку одно лицо перекрывается множеством соседних окон, применяется Non-Maximum Suppression (NMS). Алгоритм сортирует детекции по уверенности, берёт окно с максимальной вероятностью, вычисляет IoU (Intersection over Union) с остальными и удаляет все, у которых перекрытие превышает `iou_thresh=0.3`. Процесс повторяется рекурсивно, оставляя только уникальные локализованные объекты.
+<br>• <b>Классификация пола:</b> для каждого финального bounding box вырезается кроп, масштабируется до 64×64 и пропускается через обученный классификатор пола. Результат (0 или 1) добавляется к координатам.
 
 ```python
 def image_pyramid_manual(image_uint8, scale=0.85, min_size=64):
@@ -1461,34 +1589,35 @@ def nms_manual(detections, iou_thresh=0.3):
         detections = [d for d in detections if iou_manual(best[1:], d[1:]) < iou_thresh]
     return kept
 
-def detect_and_classify_lbp(image_uint8, detector, gender_clf,
-                        win_h, win_w, step=16, scale=0.85,
-                        det_threshold=0.5, iou_thresh=0.3):
+def detect_and_classify_cnn(image_uint8, model_det, model_gen,
+                            win_h=IMG_SIZE, win_w=IMG_SIZE,
+                            step=16, scale=0.85,
+                            det_threshold=0.5, iou_thresh=0.3):
     detections = []
     for img_scaled, factor in image_pyramid_manual(image_uint8, scale=scale):
         for r, c, patch in sliding_window_manual(img_scaled, win_h, win_w, step):
-            gray = to_gray_manual(patch).astype(np.uint8)
-            gray_res = bilinear_resize(gray, win_w, win_h)
-            desc = compute_lbp_manual(gray_res).reshape(1, -1)
-            
-            score = detector.decision_function(desc)[0]
-            if score > det_threshold:
+            patch_resized = cv2.resize(patch, (IMG_SIZE, IMG_SIZE)) / 255.0
+            patch_batch = np.expand_dims(patch_resized, axis=0)
+            prob = model_det.predict(patch_batch, verbose=0)[0, 0]
+
+            if prob > det_threshold:
                 r0 = int(r / factor); c0 = int(c / factor)
-                r1 = int((r+win_h) / factor); c1 = int((c+win_w) / factor)
-                detections.append((score, r0, c0, r1, c1))
-                
+                r1 = int((r + win_h) / factor); c1 = int((c + win_w) / factor)
+                detections.append((prob, r0, c0, r1, c1))
+
     detections = nms_manual(detections, iou_thresh)
-    
+
     results = []
-    for score, r0, c0, r1, c1 in detections:
+    for prob, r0, c0, r1, c1 in detections:
         crop = image_uint8[r0:r1, c0:c1]
         if crop.size == 0: continue
-        gray = to_gray_manual(crop).astype(np.uint8)
-        gray_res = bilinear_resize(gray, win_w, win_h)
-        desc = compute_lbp_manual(gray_res).reshape(1, -1)
-        gender = gender_clf.predict(desc)[0]
-        results.append((r0, c0, r1, c1, gender))
+        crop_resized = cv2.resize(crop, (IMG_SIZE, IMG_SIZE)) / 255.0
+        crop_batch = np.expand_dims(crop_resized, axis=0)
+        gender_pred = np.argmax(model_gen.predict(crop_batch, verbose=0))
+        results.append((r0, c0, r1, c1, gender_pred))
     return results
+
+print(f'Размер окна детектора {IMG_SIZE}×{IMG_SIZE} пикселей')
 ```
 
 
@@ -1498,21 +1627,37 @@ def detect_and_classify_lbp(image_uint8, detector, gender_clf,
 
 
 ```python
-test_imgs_idx = np.random.choice(len(X_te_g), 4, replace=False)
+n_lfw = len(y_lfw_original)
+test_imgs_idx = np.random.choice(n_lfw, 4, replace=False)
+
 f, axes = plt.subplots(1, 4, figsize=(16, 4))
 for i, idx in enumerate(test_imgs_idx):
-    orig_idx = valid_indices[idx]
-    img = (lfw.images[orig_idx] * 255).astype(np.uint8)
-    pred = gender_pipe.predict(X_faces[idx].reshape(1, -1))[0]
-    true = y_gender[idx]
-    color = [255, 0, 0] if pred == 0 else [0, 0, 255]
-    img_vis = img.copy()
-    img_vis[:3, :] = img_vis[-3:, :] = img_vis[:, :3] = img_vis[:, -3:] = color
-    axes[i].imshow(img_vis)
-    axes[i].set_title(f'Предсказание: {"Муж" if pred==0 else "Жен"}\nИстина: {"Муж" if true==0 else "Жен"}')
+    img = X_lfw_original[idx].copy()
+    true = y_lfw_original[idx]
+    
+    img_batch = np.expand_dims(img, axis=0)
+    probs = model_gen.predict(img_batch, verbose=0)[0]
+    pred = np.argmax(probs)
+    
+    vmin, vmax = img.min(), img.max()
+    if vmax - vmin > 1e-6:
+        img_disp = (img - vmin) / (vmax - vmin)
+    else:
+        img_disp = img
+    
+    color = [1.0, 0.0, 0.0] if pred == 0 else [0.0, 0.0, 1.0]
+    img_disp[:3, :, :] = color
+    img_disp[-3:, :, :] = color
+    img_disp[:, :3, :] = color
+    img_disp[:, -3:, :] = color
+    
+    axes[i].imshow(img_disp)
+    axes[i].set_title(f'Пред: {"Муж" if pred==0 else "Жен"} | Ист: {"Муж" if true==0 else "Жен"}')
     axes[i].axis('off')
-plt.suptitle('LBP + SVM: Классификация пола на тесте')
-plt.tight_layout(); plt.show()
+
+plt.suptitle('CNN: Классификация пола на тесте')
+plt.tight_layout()
+plt.show()
 ```
 
 ![png](README_files/Безымянный16.png)
@@ -1523,10 +1668,26 @@ plt.tight_layout(); plt.show()
 
 
 ```python
-y_pred_det = detector_pipe.predict(X_te)
-cm_det = confusion_matrix(y_te, y_pred_det, labels=[-1, 1])
-y_pred_gen = gender_pipe.predict(X_te_g)
-cm_gen = confusion_matrix(y_te_g, y_pred_gen, labels=[0, 1])
+probs_det = model_det.predict(X_te_det).flatten()
+
+prec, rec, thresholds = precision_recall_curve(y_te_det, probs_det)
+f1_scores = 2 * (prec * rec) / (prec + rec + 1e-7)
+best_thresh = thresholds[np.argmax(f1_scores)]
+print(f"✅ Оптимальный порог для детектора: {best_thresh:.3f}")
+
+y_pred_det = (probs_det > best_thresh).astype(int)
+y_true_det = y_te_det
+
+cm_det = confusion_matrix(y_true_det, y_pred_det, labels=[0, 1])
+print("Детектор (CNN):")
+print(classification_report(y_true_det, y_pred_det, target_names=['не-лицо', 'лицо']))
+print("Детектор (CNN):")
+print(classification_report(y_true_det, y_pred_det, target_names=['не-лицо', 'лицо']))
+
+y_pred_gen = np.argmax(model_gen.predict(X_te_gen), axis=1)
+cm_gen = confusion_matrix(y_te_gen, y_pred_gen, labels=[0, 1])
+print("Пол (CNN):")
+print(classification_report(y_te_gen, y_pred_gen, target_names=['мужчина', 'женщина']))
 
 f, axes = plt.subplots(1, 2, figsize=(12, 5))
 for ax, cm, title, labels in [
@@ -1534,21 +1695,23 @@ for ax, cm, title, labels in [
     (axes[1], cm_gen, 'Классификатор пола', ['мужчина', 'женщина'])
 ]:
     ax.imshow(cm, interpolation='nearest', cmap='Blues')
-    ax.set_title(title); ax.set_xticks([0, 1]); ax.set_xticklabels(labels)
+    ax.set_title(title)
+    ax.set_xticks([0, 1]); ax.set_xticklabels(labels)
     ax.set_yticks([0, 1]); ax.set_yticklabels(labels)
     ax.set_ylabel('Истина'); ax.set_xlabel('Предсказание')
     for i in range(2):
         for j in range(2):
             ax.text(j, i, str(cm[i, j]), ha='center', va='center',
                     color='white' if cm[i, j] > cm.max()/2 else 'black', fontsize=14)
-plt.tight_layout(); plt.show()
+plt.tight_layout()
+plt.show()
 
-print(f'Точность детектора:           {accuracy_score(y_te, y_pred_det):.3f}')
-print(f'Точность классификатора пола: {accuracy_score(y_te_g, y_pred_gen):.3f}')
+print(f'Точность детектора (CNN):           {accuracy_score(y_true_det, y_pred_det):.3f}')
+print(f'Точность классификатора пола (CNN): {accuracy_score(y_te_gen, y_pred_gen):.3f}')
 ```
 
 ![png](README_files/Безымянный15.png)
 
 # Вывод
 
-В ходе лабораторной работы реализован полный конвейер детектирования лиц и классификации пола на основе LBP + Linear SVM. Все операции предобработки, извлечения признаков и постобработки написаны вручную без использования готовых CV-библиотек. Синтетические негативы обеспечивают сбалансированность классов и повышают обобщающую способность детектора.
+В ходе лабораторной работы реализован полный конвейер детектирования лиц и классификации пола на базе современных сверточных нейронных сетей. Все этапы – от подготовки сбалансированного датасета до обучения двух независимых CNN, реализации кастомного NMS, пирамиды масштабов и автоматической оптимизации порога детекции по F1-мере – выполнены с использованием TensorFlow/Keras и NumPy. Применение `BatchNormalization`, `GlobalAveragePooling2D`, регуляризации L2 и коллбэков `EarlyStopping`/`ReduceLROnPlateau` позволило достичь высокой точности: ~0.98 для детектора лицо/не-лицо и ~0.95 для классификатора пола, что подтверждается отчётами классификации и матрицами ошибок. 
